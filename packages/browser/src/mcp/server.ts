@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod/v4";
-import { Effect, Option, type ManagedRuntime } from "effect";
+import { Duration, Effect, Option, type ManagedRuntime } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { evaluateRuntime } from "../utils/evaluate-runtime";
 import { runAccessibilityAudit } from "../accessibility";
@@ -13,6 +13,7 @@ import { OverlayController } from "./overlay-controller";
 import {
   DUPLICATE_REQUEST_WINDOW_MS,
   MAX_STRINGIFY_LENGTH,
+  PLAYWRIGHT_EVAL_TIMEOUT_MS,
   PLAYWRIGHT_RESULTS_DIR,
   TMP_ARTIFACT_OUTPUT_DIRECTORY,
 } from "./constants";
@@ -319,7 +320,16 @@ export const createBrowserMcpServer = <E>(
                 error: error instanceof Error ? error.message : String(error),
               };
             }
-          });
+          }).pipe(
+            Effect.timeoutOrElse({
+              duration: Duration.millis(PLAYWRIGHT_EVAL_TIMEOUT_MS),
+              onTimeout: () =>
+                Effect.succeed({
+                  success: false as const,
+                  error: `Evaluation timed out after ${PLAYWRIGHT_EVAL_TIMEOUT_MS}ms. The browser page is still usable, but the code may still be running in the background.`,
+                }),
+            }),
+          );
 
           yield* overlay.logAction(sessionData.page, cursorLabel, code);
 
