@@ -28,6 +28,7 @@ import {
   EXPECT_BASE_URL_ENV_NAME,
   EXPECT_HEADED_ENV_NAME,
   EXPECT_PROFILE_ENV_NAME,
+  EXPECT_VIDEO_ENV_NAME,
   MAX_BUFFERED_CONSOLE_MESSAGES,
   MAX_BUFFERED_NETWORK_REQUESTS,
   TMP_ARTIFACT_OUTPUT_DIRECTORY,
@@ -180,6 +181,11 @@ export class McpSession extends ServiceMap.Service<McpSession>()("@browser/McpSe
     });
     const profileConfig = yield* Config.option(Config.string(EXPECT_PROFILE_ENV_NAME));
     const configuredProfileName = Option.getOrUndefined(profileConfig);
+    const videoConfig = yield* Config.option(Config.string(EXPECT_VIDEO_ENV_NAME));
+    const isVideoEnabled = Option.match(videoConfig, {
+      onNone: () => false,
+      onSome: (value) => value !== "false",
+    });
     const cookieBrowserKeys = Option.match(cookieBrowsersConfig, {
       onNone: (): string[] => [],
       onSome: (value) => value.split(",").filter(Boolean),
@@ -321,18 +327,19 @@ export class McpSession extends ServiceMap.Service<McpSession>()("@browser/McpSe
       yield* Ref.set(savedScreenshotPathsRef, []);
 
       const cookiesOption = yield* resolveCookies(options.cookies);
-      const videoOutputDir = path.join(
-        TMP_ARTIFACT_OUTPUT_DIRECTORY,
-        PLAYWRIGHT_VIDEO_SUBDIRECTORY,
-      );
+      const videoOutputDir = isVideoEnabled
+        ? path.join(TMP_ARTIFACT_OUTPUT_DIRECTORY, PLAYWRIGHT_VIDEO_SUBDIRECTORY)
+        : undefined;
 
-      yield* fileSystem
-        .makeDirectory(videoOutputDir, { recursive: true })
-        .pipe(
-          Effect.catchCause((cause) =>
-            Effect.logDebug("Failed to create Playwright video directory", { cause }),
-          ),
-        );
+      if (videoOutputDir) {
+        yield* fileSystem
+          .makeDirectory(videoOutputDir, { recursive: true })
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.logDebug("Failed to create Playwright video directory", { cause }),
+            ),
+          );
+      }
 
       const explicitCdpUrl = Option.orElse(options.cdpUrl ?? Option.none(), () => defaultCdpUrl);
       const headed = options.headed ?? isHeadedDefault;

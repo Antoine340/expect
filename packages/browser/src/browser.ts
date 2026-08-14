@@ -229,7 +229,9 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
         if (options.videoOutputDir) {
           contextOptions.recordVideo = {
             dir: options.videoOutputDir,
-            size: { width: VIDEO_WIDTH_PX, height: VIDEO_HEIGHT_PX },
+            ...(!options.headed && {
+              size: { width: VIDEO_WIDTH_PX, height: VIDEO_HEIGHT_PX },
+            }),
           };
         }
 
