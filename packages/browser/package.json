@@ -32,7 +32,7 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "accessibility-checker-engine": "^4.0.16",
     "effect": "4.0.0-beta.35",
-    "playwright": "^1.52.0",
+    "playwright": "1.61.1",
     "react": "^19.2.4",
     "react-dom": "19.2.4",
     "tailwindcss": "^4.2.2",

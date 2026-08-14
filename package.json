@@ -26,5 +26,11 @@
     "typescript": "^5.7.0",
     "vite-plus": "^0.1.12"
   },
-  "packageManager": "pnpm@10.29.1"
+  "packageManager": "pnpm@10.29.1",
+  "pnpm": {
+    "overrides": {
+      "playwright": "1.61.1",
+      "playwright-core": "1.61.1"
+    }
+  }
 }
