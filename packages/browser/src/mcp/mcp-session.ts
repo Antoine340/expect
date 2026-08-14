@@ -28,6 +28,8 @@ import {
   EXPECT_BASE_URL_ENV_NAME,
   EXPECT_HEADED_ENV_NAME,
   EXPECT_PROFILE_ENV_NAME,
+  MAX_BUFFERED_CONSOLE_MESSAGES,
+  MAX_BUFFERED_NETWORK_REQUESTS,
   TMP_ARTIFACT_OUTPUT_DIRECTORY,
 } from "./constants";
 import { McpSessionNotOpenError } from "./errors";
@@ -89,16 +91,37 @@ interface BrowserOpenAnalyticsProperties {
 
 const PLAYWRIGHT_VIDEO_SUBDIRECTORY = "playwright";
 
+const pushBounded = <Entry>(buffer: Entry[], entry: Entry, maxEntries: number) => {
+  buffer.push(entry);
+  if (buffer.length > maxEntries) buffer.splice(0, buffer.length - maxEntries);
+};
+
+const resolvePendingRequest = (
+  pendingRequests: Map<string, NetworkEntry[]>,
+  key: string,
+  status: number | undefined,
+) => {
+  const pending = pendingRequests.get(key);
+  if (!pending) return;
+  const entry = pending.shift();
+  if (entry) entry.status = status;
+  if (pending.length === 0) pendingRequests.delete(key);
+};
+
 const setupPageTracking = (page: Page, sessionData: BrowserSessionData) => {
   if (sessionData.trackedPages.has(page)) return;
   sessionData.trackedPages.add(page);
 
   page.on("console", (message) => {
-    sessionData.consoleMessages.push({
-      type: message.type(),
-      text: message.text(),
-      timestamp: Date.now(),
-    });
+    pushBounded(
+      sessionData.consoleMessages,
+      {
+        type: message.type(),
+        text: message.text(),
+        timestamp: Date.now(),
+      },
+      MAX_BUFFERED_CONSOLE_MESSAGES,
+    );
   });
 
   const pendingRequests = new Map<string, NetworkEntry[]>();
@@ -111,7 +134,7 @@ const setupPageTracking = (page: Page, sessionData: BrowserSessionData) => {
       resourceType: request.resourceType(),
       timestamp: Date.now(),
     };
-    sessionData.networkRequests.push(entry);
+    pushBounded(sessionData.networkRequests, entry, MAX_BUFFERED_NETWORK_REQUESTS);
     const key = `${entry.method}:${entry.url}`;
     const pending = pendingRequests.get(key);
     if (pending) {
@@ -122,13 +145,20 @@ const setupPageTracking = (page: Page, sessionData: BrowserSessionData) => {
   });
 
   page.on("response", (response) => {
-    const key = `${response.request().method()}:${response.url()}`;
-    const pending = pendingRequests.get(key);
-    if (pending) {
-      const entry = pending.shift();
-      if (entry) entry.status = response.status();
-      if (pending.length === 0) pendingRequests.delete(key);
-    }
+    resolvePendingRequest(
+      pendingRequests,
+      `${response.request().method()}:${response.url()}`,
+      response.status(),
+    );
+  });
+
+  page.on("requestfailed", (request) => {
+    resolvePendingRequest(pendingRequests, `${request.method()}:${request.url()}`, undefined);
+  });
+
+  page.once("close", () => {
+    pendingRequests.clear();
+    sessionData.trackedPages.delete(page);
   });
 };
 
