@@ -7,6 +7,8 @@ import { Array as Arr, Effect, Layer, Option, ServiceMap } from "effect";
 
 import {
   AGENT_OVERLAY_CONTAINER_ID,
+  BOUNDING_BOX_CONCURRENCY,
+  BOUNDING_BOX_TIMEOUT_MS,
   CONTENT_ROLES,
   HEADLESS_CHROMIUM_ARGS,
   INTERACTIVE_ROLES,
@@ -426,22 +428,36 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
       options: AnnotatedScreenshotOptions = {},
     ) {
       const snapshotResult = yield* snapshot(page, options);
+      const refEntries = Object.entries(snapshotResult.refs);
+
+      // HACK: refs come from a snapshot taken milliseconds ago, so a miss means the element is
+      // gone, not slow. Without an explicit timeout Playwright waits 30s per miss (its library
+      // default, despite the `boundingBox` type doc claiming none).
+      const boxes = yield* Effect.forEach(
+        refEntries,
+        ([ref]) =>
+          snapshotResult.locator(ref).pipe(
+            Effect.flatMap((locator) =>
+              Effect.tryPromise(() => locator.boundingBox({ timeout: BOUNDING_BOX_TIMEOUT_MS })),
+            ),
+            Effect.catchTag("UnknownError", () => Effect.succeed(undefined)),
+          ),
+        { concurrency: BOUNDING_BOX_CONCURRENCY },
+      );
+
       const annotations: Annotation[] = [];
       const labelPositions: Array<{ label: number; x: number; y: number }> = [];
 
       let labelCounter = 0;
 
-      for (const [ref, entry] of Object.entries(snapshotResult.refs)) {
-        const locator = yield* snapshotResult.locator(ref);
-        const box = yield* Effect.tryPromise(() => locator.boundingBox()).pipe(
-          Effect.catchTag("UnknownError", () => Effect.succeed(undefined)),
-        );
-        if (!box) continue;
+      refEntries.forEach(([ref, entry], index) => {
+        const box = boxes[index];
+        if (!box) return;
 
         labelCounter++;
         annotations.push({ label: labelCounter, ref, role: entry.role, name: entry.name });
         labelPositions.push({ label: labelCounter, x: box.x, y: box.y });
-      }
+      });
 
       yield* evaluateRuntime(page, "hideAgentOverlay", AGENT_OVERLAY_CONTAINER_ID).pipe(
         Effect.catchCause((cause) =>
