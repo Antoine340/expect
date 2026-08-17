@@ -38,12 +38,12 @@ describe("snapshot", () => {
       const result = await run(snapshotPage(page));
       expect(result.tree).toContain("heading");
       expect(result.tree).toContain("Hello World");
-      expect(result.tree).toContain("[ref=e1]");
+      expect(result.tree).toMatch(/\[ref=e\d+\]/);
       expect(typeof result.refs).toBe("object");
       expect(Object.keys(result.refs).length).toBeGreaterThan(0);
     });
 
-    it("should assign sequential ref ids", async () => {
+    it("should assign one distinct ref per element", async () => {
       await page.setContent(`
         <html><body>
           <button>First</button>
@@ -53,9 +53,10 @@ describe("snapshot", () => {
       `);
 
       const result = await run(snapshotPage(page));
-      expect(result.refs.e1).toBeDefined();
-      expect(result.refs.e2).toBeDefined();
-      expect(result.refs.e3).toBeDefined();
+      const buttons = Object.entries(result.refs).filter(([, entry]) => entry.role === "button");
+      expect(buttons).toHaveLength(3);
+      expect(new Set(buttons.map(([ref]) => ref)).size).toBe(3);
+      expect(buttons.map(([, entry]) => entry.name)).toEqual(["First", "Second", "Third"]);
     });
 
     it("should store role and name in refs", async () => {
@@ -85,8 +86,8 @@ describe("snapshot", () => {
     });
   });
 
-  describe("nth disambiguation", () => {
-    it("should set nth on duplicate role+name entries", async () => {
+  describe("duplicate names", () => {
+    it("should give identically named elements distinct refs", async () => {
       await page.setContent(`
         <html><body>
           <button>OK</button>
@@ -96,26 +97,11 @@ describe("snapshot", () => {
       `);
 
       const result = await run(snapshotPage(page));
-      const okButtons = Object.values(result.refs).filter(
-        (entry) => entry.role === "button" && entry.name === "OK",
+      const okRefs = Object.entries(result.refs).filter(
+        ([, entry]) => entry.role === "button" && entry.name === "OK",
       );
-      expect(okButtons.length).toBe(2);
-      expect(okButtons[0].nth).toBe(0);
-      expect(okButtons[1].nth).toBe(1);
-    });
-
-    it("should not set nth on unique role+name entries", async () => {
-      await page.setContent(`
-        <html><body>
-          <button>OK</button>
-          <button>Cancel</button>
-        </body></html>
-      `);
-
-      const result = await run(snapshotPage(page));
-      for (const entry of Object.values(result.refs)) {
-        expect(entry.nth).toBeUndefined();
-      }
+      expect(okRefs).toHaveLength(2);
+      expect(okRefs[0][0]).not.toBe(okRefs[1][0]);
     });
   });
 
@@ -146,7 +132,10 @@ describe("snapshot", () => {
         </body></html>
       `);
       const result = await run(snapshotPage(page));
-      await expect(run(result.locator("nonexistent"))).rejects.toThrow("available refs: e1");
+      const [firstRef] = Object.keys(result.refs);
+      await expect(run(result.locator("nonexistent"))).rejects.toThrow(
+        `available refs: ${firstRef}`,
+      );
     });
 
     it("should fail on unknown ref with empty page hint", async () => {
@@ -576,9 +565,10 @@ describe("snapshot", () => {
       ).join("");
       await page.setContent(`<html><body>${items}</body></html>`);
       const result = await run(snapshotPage(page));
-      expect(Object.keys(result.refs).length).toBe(50);
-      expect(result.refs.e1).toBeDefined();
-      expect(result.refs.e50).toBeDefined();
+      const buttons = Object.values(result.refs).filter((entry) => entry.role === "button");
+      expect(buttons).toHaveLength(50);
+      expect(buttons[0].name).toBe("Button 0");
+      expect(buttons[49].name).toBe("Button 49");
     });
 
     it("should handle default options when none are provided", async () => {

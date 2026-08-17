@@ -202,10 +202,13 @@ describe("MCP server tools", () => {
 
   it("playwright snapshotAfter with no return value omits result key", async () => {
     await callTool("open", { url: testServerUrl });
-    await callTool("screenshot", { mode: "snapshot" });
+    const snapshot = await callTool("screenshot", { mode: "snapshot" });
+    const { refs } = JSON.parse(textContent(snapshot));
+    const buttonRef = Object.keys(refs).find((key) => refs[key].role === "button");
+    expect(buttonRef).toBeDefined();
 
     const result = await callTool("playwright", {
-      code: `await ref('e1').click();`,
+      code: `await ref(${JSON.stringify(buttonRef)}).click();`,
       snapshotAfter: true,
     });
     const data = JSON.parse(textContent(result));

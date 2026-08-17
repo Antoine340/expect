@@ -1,5 +1,4 @@
 export const SNAPSHOT_TIMEOUT_MS = 30_000;
-export const REF_PREFIX = "e";
 export const EXCLUDED_ARIA_ROLE = "text";
 export const HEADLESS_CHROMIUM_ARGS = [
   "--enable-webgl",
@@ -63,9 +62,6 @@ export const HEADLESS_CHROME_WINDOW_WIDTH_PX = 1280;
 export const HEADLESS_CHROME_WINDOW_HEIGHT_PX = 720;
 
 export const OVERLAY_REINJECT_TIMEOUT_MS = 5_000;
-
-export const BOUNDING_BOX_TIMEOUT_MS = 1_000;
-export const BOUNDING_BOX_CONCURRENCY = 8;
 
 export const BROWSER_CLOSE_TIMEOUT_MS = 10_000;
 export const VIDEO_PATH_TIMEOUT_MS = 15_000;

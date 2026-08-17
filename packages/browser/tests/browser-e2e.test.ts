@@ -195,7 +195,7 @@ describe("browser e2e", () => {
         ([, entry]) => entry.role === "button" && entry.name === "Open",
       );
       expect(openRefs).toHaveLength(2);
-      expect(openRefs.map(([, entry]) => entry.nth)).toEqual([0, 1]);
+      expect(openRefs[0][0]).not.toBe(openRefs[1][0]);
 
       const betaOpenLocator = await Effect.runPromise(snapshot.locator(openRefs[1][0]));
       await betaOpenLocator.click();

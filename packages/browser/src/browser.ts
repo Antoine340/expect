@@ -7,8 +7,6 @@ import { Array as Arr, Effect, Layer, Option, ServiceMap } from "effect";
 
 import {
   AGENT_OVERLAY_CONTAINER_ID,
-  BOUNDING_BOX_CONCURRENCY,
-  BOUNDING_BOX_TIMEOUT_MS,
   CONTENT_ROLES,
   HEADLESS_CHROMIUM_ARGS,
   INTERACTIVE_ROLES,
@@ -17,7 +15,6 @@ import {
   POST_NAVIGATION_SETTLE_MS,
   VIDEO_HEIGHT_PX,
   VIDEO_WIDTH_PX,
-  REF_PREFIX,
   SNAPSHOT_TIMEOUT_MS,
   CDP_CONNECT_TIMEOUT_MS,
 } from "./constants";
@@ -30,11 +27,11 @@ import {
 import { toActionError } from "./utils/action-error";
 import { compactTree } from "./utils/compact-tree";
 import { createLocator } from "./utils/create-locator";
+import { dropRootWrapper } from "./utils/drop-root-wrapper";
 import { evaluateRuntime } from "./utils/evaluate-runtime";
-import { findCursorInteractive } from "./utils/find-cursor-interactive";
 import { getIndentLevel } from "./utils/get-indent-level";
+import { parseAriaAttributes, stripAriaAttributes } from "./utils/parse-aria-attributes";
 import { parseAriaLine } from "./utils/parse-aria-line";
-import { resolveNthDuplicates } from "./utils/resolve-nth-duplicates";
 import { computeSnapshotStats } from "./utils/snapshot-stats";
 import { RUNTIME_SCRIPT } from "./generated/runtime-script";
 import type {
@@ -127,40 +124,6 @@ const extractCookiesForBrowserKeys = Effect.fn("Browser.extractCookiesForBrowser
 
   return dedupCookies(results.flat());
 }, Effect.provide(cookiesLayer));
-
-const appendCursorInteractiveElements = Effect.fn("Browser.appendCursorInteractive")(function* (
-  page: Page,
-  filteredLines: string[],
-  refs: RefMap,
-  refCount: number,
-  options: SnapshotOptions,
-) {
-  const cursorElements = yield* findCursorInteractive(page, options.selector);
-  if (cursorElements.length === 0) return refCount;
-
-  const existingNames = new Set(Object.values(refs).map((entry) => entry.name.toLowerCase()));
-  const newLines: string[] = [];
-
-  for (const element of cursorElements) {
-    if (existingNames.has(element.text.toLowerCase())) continue;
-    existingNames.add(element.text.toLowerCase());
-
-    const ref = `${REF_PREFIX}${++refCount}`;
-    refs[ref] = {
-      role: "clickable",
-      name: element.text,
-      selector: element.selector,
-    };
-    newLines.push(`- clickable "${element.text}" [ref=${ref}] [${element.reason}]`);
-  }
-
-  if (newLines.length > 0) {
-    filteredLines.push("# Cursor-interactive elements:");
-    filteredLines.push(...newLines);
-  }
-
-  return refCount;
-});
 
 const injectOverlayLabels = (page: Page, labels: Array<{ label: number; x: number; y: number }>) =>
   evaluateRuntime(page, "injectOverlayLabels", OVERLAY_CONTAINER_ID, labels);
@@ -339,7 +302,7 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
 
       const rawTree = yield* Effect.ensuring(
         Effect.tryPromise({
-          try: () => page.locator(selector).ariaSnapshot({ timeout }),
+          try: () => page.locator(selector).ariaSnapshot({ mode: "ai", boxes: true, timeout }),
           catch: (cause) =>
             new SnapshotTimeoutError({
               selector,
@@ -365,38 +328,29 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
       const filteredLines: string[] = [];
       let refCount = 0;
 
-      for (const line of rawTree.split("\n")) {
+      for (const line of dropRootWrapper(rawTree.split("\n"))) {
         if (options.maxDepth !== undefined && getIndentLevel(line) > options.maxDepth) continue;
 
         const parsed = parseAriaLine(line);
         if (Option.isNone(parsed)) {
-          if (!options.interactive) filteredLines.push(line);
+          if (!options.interactive) filteredLines.push(stripAriaAttributes(line, false));
           continue;
         }
 
         const { role, name } = parsed.value;
-        if (options.interactive && !INTERACTIVE_ROLES.has(role)) continue;
+        const { ref, box, cursorPointer } = parseAriaAttributes(line);
+        const isInteractive =
+          INTERACTIVE_ROLES.has(role) || (Boolean(options.cursor) && cursorPointer);
+        if (options.interactive && !isInteractive) continue;
 
-        if (shouldAssignRef(role, name, options.interactive)) {
-          const ref = `${REF_PREFIX}${++refCount}`;
-          refs[ref] = { role, name };
-          filteredLines.push(`${line} [ref=${ref}]`);
-        } else {
-          filteredLines.push(line);
+        const surfaced =
+          ref !== undefined && (isInteractive || shouldAssignRef(role, name, options.interactive));
+        if (surfaced) {
+          refCount++;
+          refs[ref] = { role, name, ...(box && { box }) };
         }
+        filteredLines.push(stripAriaAttributes(line, surfaced));
       }
-
-      if (options.cursor) {
-        refCount = yield* appendCursorInteractiveElements(
-          page,
-          filteredLines,
-          refs,
-          refCount,
-          options,
-        );
-      }
-
-      resolveNthDuplicates(refs);
 
       let tree = filteredLines.join("\n");
       if (options.interactive && refCount === 0) tree = "(no interactive elements)";
@@ -428,36 +382,20 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
       options: AnnotatedScreenshotOptions = {},
     ) {
       const snapshotResult = yield* snapshot(page, options);
-      const refEntries = Object.entries(snapshotResult.refs);
-
-      // HACK: refs come from a snapshot taken milliseconds ago, so a miss means the element is
-      // gone, not slow. Without an explicit timeout Playwright waits 30s per miss (its library
-      // default, despite the `boundingBox` type doc claiming none).
-      const boxes = yield* Effect.forEach(
-        refEntries,
-        ([ref]) =>
-          snapshotResult.locator(ref).pipe(
-            Effect.flatMap((locator) =>
-              Effect.tryPromise(() => locator.boundingBox({ timeout: BOUNDING_BOX_TIMEOUT_MS })),
-            ),
-            Effect.catchTag("UnknownError", () => Effect.succeed(undefined)),
-          ),
-        { concurrency: BOUNDING_BOX_CONCURRENCY },
-      );
 
       const annotations: Annotation[] = [];
       const labelPositions: Array<{ label: number; x: number; y: number }> = [];
 
       let labelCounter = 0;
 
-      refEntries.forEach(([ref, entry], index) => {
-        const box = boxes[index];
-        if (!box) return;
+      for (const [ref, entry] of Object.entries(snapshotResult.refs)) {
+        const box = entry.box;
+        if (!box || box.width <= 0 || box.height <= 0) continue;
 
         labelCounter++;
         annotations.push({ label: labelCounter, ref, role: entry.role, name: entry.name });
         labelPositions.push({ label: labelCounter, x: box.x, y: box.y });
-      });
+      }
 
       yield* evaluateRuntime(page, "hideAgentOverlay", AGENT_OVERLAY_CONTAINER_ID).pipe(
         Effect.catchCause((cause) =>

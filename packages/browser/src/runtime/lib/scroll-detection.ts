@@ -1,7 +1,7 @@
 const SCROLL_OVERFLOW_THRESHOLD_PX = 10;
 const MIN_SCROLLABLE_CHILDREN = 5;
 const HIDDEN_MARKER_ATTR = "data-expect-scroll-hidden";
-const PREV_ARIA_HIDDEN_ATTR = "data-expect-prev-aria-hidden";
+const PREV_VISIBILITY_ATTR = "data-expect-prev-visibility";
 const MARKER_ELEMENT_ATTR = "data-expect-scroll-marker";
 const MARKER_STYLE = "position:absolute;width:0;height:0;overflow:hidden;";
 
@@ -11,11 +11,15 @@ export interface ScrollContainerResult {
   hiddenBelow: number;
 }
 
-const hideChild = (child: Element, direction: "above" | "below") => {
-  const previous = child.getAttribute("aria-hidden");
-  if (previous) child.setAttribute(PREV_ARIA_HIDDEN_ATTR, previous);
-  child.setAttribute("aria-hidden", "true");
+// HACK: ariaSnapshot({ mode: "ai" }) reports aria-hidden subtrees, so hiding must be visual.
+// visibility:hidden is excluded from the snapshot and, unlike display:none, reflows nothing —
+// the boxes reported for the remaining elements stay accurate.
+const hideChild = (child: Element, direction: "above" | "below"): boolean => {
+  if (!(child instanceof HTMLElement) && !(child instanceof SVGElement)) return false;
+  child.setAttribute(PREV_VISIBILITY_ATTR, child.style.visibility);
+  child.style.visibility = "hidden";
   child.setAttribute(HIDDEN_MARKER_ATTR, direction);
+  return true;
 };
 
 const insertMarker = (parent: Element, label: string, before: Element | null) => {
@@ -52,11 +56,9 @@ export const prepareViewportSnapshot = (): ScrollContainerResult[] => {
     for (const child of children) {
       const childRect = child.getBoundingClientRect();
       if (childRect.bottom < containerRect.top) {
-        hideChild(child, "above");
-        hiddenAbove++;
+        if (hideChild(child, "above")) hiddenAbove++;
       } else if (childRect.top > containerRect.bottom) {
-        hideChild(child, "below");
-        hiddenBelow++;
+        if (hideChild(child, "below")) hiddenBelow++;
       } else {
         if (!firstVisibleChild) firstVisibleChild = child;
         lastVisibleChild = child;
@@ -84,13 +86,10 @@ export const prepareViewportSnapshot = (): ScrollContainerResult[] => {
 
 export const restoreViewportSnapshot = (): void => {
   for (const element of document.querySelectorAll(`[${HIDDEN_MARKER_ATTR}]`)) {
-    const previous = element.getAttribute(PREV_ARIA_HIDDEN_ATTR);
-    if (previous) {
-      element.setAttribute("aria-hidden", previous);
-      element.removeAttribute(PREV_ARIA_HIDDEN_ATTR);
-    } else {
-      element.removeAttribute("aria-hidden");
+    if (element instanceof HTMLElement || element instanceof SVGElement) {
+      element.style.visibility = element.getAttribute(PREV_VISIBILITY_ATTR) ?? "";
     }
+    element.removeAttribute(PREV_VISIBILITY_ATTR);
     element.removeAttribute(HIDDEN_MARKER_ATTR);
   }
   for (const marker of document.querySelectorAll(`[${MARKER_ELEMENT_ATTR}]`)) {

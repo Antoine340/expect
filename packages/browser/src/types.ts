@@ -15,11 +15,17 @@ export interface SnapshotOptions {
   viewportAware?: boolean;
 }
 
+export interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface RefEntry {
   role: string;
   name: string;
-  nth?: number;
-  selector?: string;
+  box?: BoundingBox;
 }
 
 export interface RefMap {
