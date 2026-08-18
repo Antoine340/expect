@@ -3,7 +3,7 @@ import { DevTools } from "effect/unstable/devtools";
 import { FlowStorage, Reporter, Updates, Watch } from "@expect/supervisor";
 import type { AgentBackend } from "@expect/agent";
 
-import { Analytics, DebugFileLoggerLayer, Tracing } from "@expect/shared/observability";
+import { Analytics, DebugFileLoggerLayer } from "@expect/shared/observability";
 import { layerSdk } from "expect-sdk/effect";
 
 export const layerCli = ({ verbose, agent }: { verbose: boolean; agent: AgentBackend }) => {
@@ -16,11 +16,10 @@ export const layerCli = ({ verbose, agent }: { verbose: boolean; agent: AgentBac
     Updates.layer,
     FlowStorage.layer,
     DevTools.layer(),
-    Analytics.layerPostHog,
+    Analytics.layerLocal,
     watchLayer,
   ).pipe(
     Layer.provide(DebugFileLoggerLayer),
-    Layer.provide(Tracing.layerAxiom("expect-cli")),
     Layer.provideMerge(Layer.succeed(References.MinimumLogLevel, verbose ? "All" : "Info")),
   );
 };

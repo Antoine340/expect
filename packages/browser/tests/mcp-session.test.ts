@@ -48,7 +48,7 @@ const runSession = (browserLayer: Layer.Layer<Browser>) =>
     }).pipe(
       Effect.provide(Layer.effect(McpSession)(McpSession.make)),
       Effect.provide(browserLayer),
-      Effect.provide(Analytics.layerDev),
+      Effect.provide(Analytics.layerLocal),
       Effect.provide(NodeServices.layer),
     ),
   );

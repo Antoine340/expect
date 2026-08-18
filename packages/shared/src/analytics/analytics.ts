@@ -1,17 +1,8 @@
 import { Config, Effect, Layer, Option, ServiceMap } from "effect";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { machineId } from "node-machine-id";
 import { hash } from "ohash";
-import { PostHog } from "posthog-node";
 
 import type { EventMap } from "./analytics-events";
-
-const POSTHOG_API_KEY = "phc_t5FKk9mlc4pKbbBimiIlrM5Acq9meRp1FSuNjmwxjAX";
-const POSTHOG_DEFAULT_HOST = "https://us.i.posthog.com";
-
-const posthogClient = new PostHog(POSTHOG_API_KEY, {
-  host: POSTHOG_DEFAULT_HOST,
-});
 
 export interface AnalyticsProviderShape {
   readonly capture: (event: {
@@ -31,35 +22,7 @@ export class AnalyticsProvider extends ServiceMap.Service<
   AnalyticsProvider,
   AnalyticsProviderShape
 >()("@expect/AnalyticsProvider") {
-  static layerPostHog = Layer.succeed(this)({
-    capture: (event) =>
-      Effect.tryPromise(() =>
-        posthogClient.captureImmediate({
-          event: event.eventName,
-          properties: event.properties,
-          distinctId: event.distinctId,
-        }),
-      ).pipe(
-        Effect.catchTag("UnknownError", (cause) =>
-          Effect.logDebug("PostHog capture failed", { cause }),
-        ),
-      ),
-    identify: (params) =>
-      Effect.sync(() => {
-        posthogClient.identify({
-          distinctId: params.distinctId,
-          properties: {
-            email: params.email,
-            ...(params.name ? { name: params.name } : {}),
-          },
-        });
-      }),
-    flush: Effect.tryPromise(() => posthogClient.flush()).pipe(
-      Effect.ignore({ log: "Debug", message: "PostHog flush failed" }),
-    ),
-  });
-
-  static layerDev = Layer.succeed(this)({
+  static layerLocal = Layer.succeed(this)({
     capture: (event) =>
       Effect.logInfo("Tracked event", {
         eventName: event.eventName,
@@ -94,17 +57,7 @@ export class Analytics extends ServiceMap.Service<Analytics>()("@expect/Analytic
       githubActionsValue !== "";
 
     const projectId = hash(process.cwd());
-
-    const distinctId = yield* Effect.tryPromise(async () => {
-      if (telemetryDisabled) return "";
-      return machineId();
-    }).pipe(
-      Effect.catchTag("UnknownError", (cause) =>
-        Effect.logWarning("Failed to get machine ID, using fallback", { cause }).pipe(
-          Effect.as(globalThis.crypto.randomUUID()),
-        ),
-      ),
-    );
+    const distinctId = projectId;
 
     const capture = <K extends keyof EventMap>(
       eventName: K,
@@ -156,12 +109,8 @@ export class Analytics extends ServiceMap.Service<Analytics>()("@expect/Analytic
     return { capture, track, flush: telemetryDisabled ? Effect.void : provider.flush } as const;
   }),
 }) {
-  static layerPostHog = Layer.effect(this)(this.make).pipe(
-    Layer.provide(AnalyticsProvider.layerPostHog),
-    Layer.provide(NodeServices.layer),
-  );
-  static layerDev = Layer.effect(this)(this.make).pipe(
-    Layer.provide(AnalyticsProvider.layerDev),
+  static layerLocal = Layer.effect(this)(this.make).pipe(
+    Layer.provide(AnalyticsProvider.layerLocal),
     Layer.provide(NodeServices.layer),
   );
 }

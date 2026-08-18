@@ -3,7 +3,7 @@ import { Analytics, type EventMap } from "@expect/shared/observability";
 import { detectParentAgent } from "@expect/shared/launched-from";
 import { usePreferencesStore } from "../stores/use-preferences";
 
-const analyticsLayer = Analytics.layerPostHog;
+const analyticsLayer = Analytics.layerLocal;
 
 export const trackEvent = <K extends keyof EventMap>(
   eventName: K,

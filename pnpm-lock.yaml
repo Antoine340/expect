@@ -509,15 +509,9 @@ importers:
       effect:
         specifier: 4.0.0-beta.35
         version: 4.0.0-beta.35
-      node-machine-id:
-        specifier: ^1.1.12
-        version: 1.1.12
       ohash:
         specifier: ^2.0.11
         version: 2.0.11
-      posthog-node:
-        specifier: ^5.28.5
-        version: 5.28.5
       which:
         specifier: ^6.0.1
         version: 6.0.1
@@ -2655,9 +2649,6 @@ packages:
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
-
-  '@posthog/core@1.24.1':
-    resolution: {integrity: sha512-e8AciAnc6MRFws89ux8lJKFAaI03yEon0ASDoUO7yS91FVqbUGXYekObUUR3LHplcg+pmyiJBI0jolY0SFbGRA==}
 
   '@posthog/rrdom@0.0.50':
     resolution: {integrity: sha512-OVDGALIH4rdt/0BuzDYj9jcir4CwWH+pRun5QLDbTnr+bjKcKgYgfb2LRobKg0NFnTBMgFfvYCC93XFl4Vda1Q==}
@@ -6001,9 +5992,6 @@ packages:
     resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
     hasBin: true
 
-  node-machine-id@1.1.12:
-    resolution: {integrity: sha512-QNABxbrPa3qEIfrE6GOJ7BYIuignnJw7iQ2YPbc3Nla1HzRJjXzZOiikfF8m7eAMfichLt3M4VgLOetqgDmgGQ==}
-
   node-notifier@10.0.1:
     resolution: {integrity: sha512-YX7TSyDukOZ0g+gmzjB6abKu+hTGvO8+8+gIFDsRCU2t8fLV/P2unmt+LGFaIa4y64aX98Qksa97rgz4vMNeLQ==}
 
@@ -6347,15 +6335,6 @@ packages:
   postcss@8.5.8:
     resolution: {integrity: sha512-OW/rX8O/jXnm82Ey1k44pObPtdblfiuWnrd8X7GJ7emImCOstunGbXUpp7HdBrFQX6rJzn3sPT397Wp5aCwCHg==}
     engines: {node: ^10 || ^12 || >=14}
-
-  posthog-node@5.28.5:
-    resolution: {integrity: sha512-+8H7rMPB48cwKhzZmq0EQXDFWjdT6yQrecq+f7c7m19HMzyvYtm54I7vNncEr9lrkzczc4kcePxwLD4qgt/YXg==}
-    engines: {node: ^20.20.0 || >=22.22.0}
-    peerDependencies:
-      rxjs: ^7.0.0
-    peerDependenciesMeta:
-      rxjs:
-        optional: true
 
   powershell-utils@0.1.0:
     resolution: {integrity: sha512-dM0jVuXJPsDN6DvRpea484tCUaMiXWjuCn++HGTqUWzGDjv5tZkEZldAJ/UMlqRYGFrD/etByo4/xOuC/snX2A==}
@@ -9647,10 +9626,6 @@ snapshots:
       config-chain: 1.1.13
 
   '@polka/url@1.0.0-next.29': {}
-
-  '@posthog/core@1.24.1':
-    dependencies:
-      cross-spawn: 7.0.6
 
   '@posthog/rrdom@0.0.50':
     dependencies:
@@ -13013,8 +12988,6 @@ snapshots:
 
   node-gyp-build@4.8.4: {}
 
-  node-machine-id@1.1.12: {}
-
   node-notifier@10.0.1:
     dependencies:
       growly: 1.3.0
@@ -13426,10 +13399,6 @@ snapshots:
       nanoid: 3.3.11
       picocolors: 1.1.1
       source-map-js: 1.2.1
-
-  posthog-node@5.28.5:
-    dependencies:
-      '@posthog/core': 1.24.1
 
   powershell-utils@0.1.0: {}
 
