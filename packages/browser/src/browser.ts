@@ -1,8 +1,6 @@
 import { Browsers, Cookies, layerLive, browserKeyOf, Cookie } from "@expect/cookies";
 import type { Browser as BrowserProfile } from "@expect/cookies";
-import { chromium, webkit, firefox } from "playwright";
 import type { Locator, Page } from "playwright";
-import type { BrowserEngine } from "./types";
 import { Array as Arr, Effect, Layer, Option, ServiceMap } from "effect";
 
 import {
@@ -43,10 +41,11 @@ import type {
 } from "./types";
 import type { ScrollContainerResult } from "./runtime/lib/scroll-detection";
 
-const BROWSER_ENGINES = { chromium, webkit, firefox } as const;
 const cookiesLayer = Layer.mergeAll(layerLive, Cookies.layer);
 
-const resolveBrowserType = (engine: BrowserEngine) => BROWSER_ENGINES[engine];
+// HACK: playwright costs ~180ms to import and is only needed once a page is created, so the MCP
+// handshake must not pay for it. Node caches the module, so later launches import it for free.
+const loadPlaywright = Effect.promise(() => import("playwright"));
 
 const shouldAssignRef = (role: string, name: string, interactive?: boolean): boolean => {
   if (INTERACTIVE_ROLES.has(role)) return true;
@@ -143,11 +142,12 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
         browserType: engine,
       });
 
-      const browserType = resolveBrowserType(engine);
+      const playwright = yield* loadPlaywright;
+      const browserType = playwright[engine];
       const browser =
         cdpUrl._tag === "Some"
           ? yield* Effect.tryPromise({
-              try: () => chromium.connectOverCDP(cdpUrl.value),
+              try: () => playwright.chromium.connectOverCDP(cdpUrl.value),
               catch: (cause) =>
                 new CdpConnectionError({
                   endpointUrl: cdpUrl.value,
