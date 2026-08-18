@@ -146,8 +146,8 @@ Prefer screenshot mode `snapshot` for observing page state. Use `screenshot` or 
 
 - No return → `"OK"`
 - With return → `{ result: <your value>, resultFile: "/tmp/.../result-<id>.json" }`
-- With return + `snapshotAfter=true` → `{ result: <value>, resultFile: "<path>", snapshot: { tree, refs, stats } }`
-- `snapshotAfter=true` only → `{ snapshot: { tree, refs, stats } }`
+- With return + `snapshotAfter=true` → `{ result: <value>, resultFile: "<path>", snapshot: { tree, stats } }`
+- `snapshotAfter=true` only → `{ snapshot: { tree, stats } }`
 
 The `resultFile` persists until the session closes. Read or grep it to reference collected data across multiple steps.
 

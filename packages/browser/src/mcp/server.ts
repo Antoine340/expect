@@ -15,6 +15,8 @@ import {
   MAX_STRINGIFY_LENGTH,
   PLAYWRIGHT_EVAL_TIMEOUT_MS,
   PLAYWRIGHT_RESULTS_DIR,
+  RESULT_FILE_INDENT,
+  SNAPSHOT_TREE_KEY,
   TMP_ARTIFACT_OUTPUT_DIRECTORY,
 } from "./constants";
 
@@ -41,13 +43,18 @@ const safeToString = (value: unknown): string => {
   }
 };
 
-const safeJsonStringify = (data: unknown): string => {
+const safeJsonStringify = (data: unknown, indent?: number): string => {
   const seen = new WeakSet();
   return JSON.stringify(
     data,
-    (_key, value) => {
+    (key, value) => {
       if (value === undefined) return undefined;
       if (value === null) return null;
+
+      // HACK: the length cap below guards against unbounded values returned by playwright code.
+      // A snapshot tree routinely exceeds it, and cutting it mid-node leaves the agent with
+      // unparseable YAML and a silently partial page, so it is exempt.
+      if (key === SNAPSHOT_TREE_KEY && typeof value === "string") return value;
 
       switch (typeof value) {
         case "bigint":
@@ -86,7 +93,7 @@ const safeJsonStringify = (data: unknown): string => {
 
       return value;
     },
-    2,
+    indent,
   );
 };
 
@@ -154,8 +161,8 @@ const buildExpectGuide = (): string =>
     "Return value format:",
     "- No return → 'OK'",
     "- With return → JSON: { result: <your value>, resultFile: '/tmp/expect-artifacts/playwright-results/result-<id>.json' }",
-    "- With return + snapshotAfter → JSON: { result: <value>, resultFile: '<path>', snapshot: { tree, refs, stats } }",
-    "- snapshotAfter only (no return) → JSON: { snapshot: { tree, refs, stats } }",
+    "- With return + snapshotAfter → JSON: { result: <value>, resultFile: '<path>', snapshot: { tree, stats } }",
+    "- snapshotAfter only (no return) → JSON: { snapshot: { tree, stats } }",
     "The resultFile persists until the session closes. Use it to read or grep collected data across multiple steps.",
     "",
     "Batch all actions that share the same page state into a single playwright call — fills, clicks, AND data collection. Do NOT batch across DOM-changing boundaries (dropdown open, modal, dialog, navigation). After a DOM-changing action, use snapshotAfter=true or take a new snapshot for fresh refs.",
@@ -340,7 +347,10 @@ export const createBrowserMcpServer = <E>(
           const hasReturnValue = codeResult.value !== undefined;
           const fileSystem = yield* FileSystem;
           const resultFile = hasReturnValue
-            ? yield* writeResultFile(fileSystem, safeJsonStringify(codeResult.value))
+            ? yield* writeResultFile(
+                fileSystem,
+                safeJsonStringify(codeResult.value, RESULT_FILE_INDENT),
+              )
             : undefined;
 
           if (snapshotAfter) {
@@ -348,7 +358,6 @@ export const createBrowserMcpServer = <E>(
             yield* session.updateLastSnapshot(snapshotResult);
             const snapshotData = {
               tree: snapshotResult.tree,
-              refs: snapshotResult.refs,
               stats: snapshotResult.stats,
             };
             if (!hasReturnValue) {
@@ -402,7 +411,7 @@ export const createBrowserMcpServer = <E>(
               session.snapshot(page, { viewportAware: !fullPage }),
             );
             yield* session.updateLastSnapshot(result);
-            return jsonResult({ tree: result.tree, refs: result.refs, stats: result.stats });
+            return jsonResult({ tree: result.tree, stats: result.stats });
           }
 
           if (resolvedMode === "annotated") {

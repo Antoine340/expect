@@ -5,6 +5,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpRuntime } from "../src/mcp/runtime";
 import { createBrowserMcpServer } from "../src/mcp/server";
+import { MAX_STRINGIFY_LENGTH } from "../src/mcp/constants";
 
 const TEST_HTML = `<!DOCTYPE html>
 <html>
@@ -20,6 +21,13 @@ const TEST_HTML = `<!DOCTYPE html>
   </script>
 </body>
 </html>`;
+
+const BIG_PAGE_HEADINGS = 500;
+const BIG_TEST_HTML = `<!DOCTYPE html>
+<html><body>${Array.from(
+  { length: BIG_PAGE_HEADINGS },
+  (_unused, index) => `<h2>Heading number ${index} with enough text to grow the tree</h2>`,
+).join("")}<button>Last Button</button></body></html>`;
 
 let testServerUrl: string;
 let httpServer: ReturnType<typeof http.createServer>;
@@ -40,12 +48,24 @@ const textContent = (result: Awaited<ReturnType<typeof callTool>>): string => {
   return textItem?.text ?? "";
 };
 
+const refForName = (tree: string, name: string): string => {
+  const match = new RegExp(`"${name}"[^\\n]*\\[ref=(e\\d+)\\]`).exec(tree);
+  expect(match, `no ref for "${name}" in tree`).toBeTruthy();
+  return match![1];
+};
+
+const refForRole = (tree: string, role: string): string => {
+  const match = new RegExp(`- ${role}[^\\n]*\\[ref=(e\\d+)\\]`).exec(tree);
+  expect(match, `no ref for role ${role} in tree`).toBeTruthy();
+  return match![1];
+};
+
 beforeAll(async () => {
   previousNoTelemetry = process.env.NO_TELEMETRY;
   process.env.NO_TELEMETRY = "1";
-  httpServer = http.createServer((_req, res) => {
+  httpServer = http.createServer((request, res) => {
     res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(TEST_HTML);
+    res.end(request.url === "/big" ? BIG_TEST_HTML : TEST_HTML);
   });
   await new Promise<void>((resolve) => httpServer.listen(0, resolve));
   const port = (httpServer.address() as AddressInfo).port;
@@ -118,19 +138,16 @@ describe("MCP server tools", () => {
     expect(snapshotData.tree).toContain("Submit");
     expect(snapshotData.tree).toContain("Email");
 
-    const refs: Record<string, { name: string }> = snapshotData.refs;
-    const emailRef = Object.entries(refs).find(([, entry]) => entry.name === "Email");
-    const submitRef = Object.entries(refs).find(([, entry]) => entry.name === "Submit");
-    expect(emailRef).toBeDefined();
-    expect(submitRef).toBeDefined();
+    const emailRef = refForName(snapshotData.tree, "Email");
+    const submitRef = refForName(snapshotData.tree, "Submit");
 
     const fillResult = await callTool("playwright", {
-      code: `await ref('${emailRef![0]}').fill('hello@test.com');`,
+      code: `await ref('${emailRef}').fill('hello@test.com');`,
     });
     expect(textContent(fillResult)).toBe("OK");
 
     const clickResult = await callTool("playwright", {
-      code: `await ref('${submitRef![0]}').click();`,
+      code: `await ref('${submitRef}').click();`,
     });
     expect(textContent(clickResult)).toBe("OK");
 
@@ -152,8 +169,8 @@ describe("MCP server tools", () => {
     const snapshotText = textContent(snapshotResult);
     const snapshotData = JSON.parse(snapshotText);
     expect(snapshotData).toHaveProperty("tree");
-    expect(snapshotData).toHaveProperty("refs");
     expect(snapshotData).toHaveProperty("stats");
+    expect(snapshotData).not.toHaveProperty("refs");
 
     const annotatedResult = await callTool("screenshot", { mode: "annotated" });
     const annotatedImage = (annotatedResult.content as Array<{ type: string }>).find(
@@ -194,8 +211,8 @@ describe("MCP server tools", () => {
     expect(data).toHaveProperty("resultFile");
     expect(data).toHaveProperty("snapshot");
     expect(data.snapshot).toHaveProperty("tree");
-    expect(data.snapshot).toHaveProperty("refs");
     expect(data.snapshot).toHaveProperty("stats");
+    expect(data.snapshot).not.toHaveProperty("refs");
     expect(data.snapshot.tree).toContain("Submit");
     await callTool("close");
   });
@@ -203,9 +220,7 @@ describe("MCP server tools", () => {
   it("playwright snapshotAfter with no return value omits result key", async () => {
     await callTool("open", { url: testServerUrl });
     const snapshot = await callTool("screenshot", { mode: "snapshot" });
-    const { refs } = JSON.parse(textContent(snapshot));
-    const buttonRef = Object.keys(refs).find((key) => refs[key].role === "button");
-    expect(buttonRef).toBeDefined();
+    const buttonRef = refForRole(JSON.parse(textContent(snapshot)).tree, "button");
 
     const result = await callTool("playwright", {
       code: `await ref(${JSON.stringify(buttonRef)}).click();`,
@@ -319,6 +334,32 @@ describe("MCP server tools", () => {
     const navResult = await callTool("open", { url: testServerUrl, browser: "webkit" });
     expect(textContent(navResult)).toContain("Navigated");
     expect(textContent(navResult)).not.toContain("[webkit]");
+
+    await callTool("close");
+  });
+});
+
+describe("snapshot payload", () => {
+  it("delivers the whole tree instead of clipping it at the stringify limit", async () => {
+    await callTool("open", { url: `${testServerUrl}/big`, waitUntil: "domcontentloaded" });
+    const text = textContent(await callTool("screenshot", { mode: "snapshot", fullPage: true }));
+    const { tree, stats } = JSON.parse(text);
+
+    expect(tree.length).toBeGreaterThan(MAX_STRINGIFY_LENGTH);
+    expect(tree).not.toContain("truncated");
+    expect(tree).toContain(`Heading number ${BIG_PAGE_HEADINGS - 1}`);
+    expect(tree).toContain("Last Button");
+    expect(stats.characters).toBe(tree.length);
+
+    await callTool("close");
+  });
+
+  it("still clips oversized values returned by playwright code", async () => {
+    await callTool("open", { url: testServerUrl });
+    const result = await callTool("playwright", {
+      code: `return "x".repeat(${MAX_STRINGIFY_LENGTH + 1000});`,
+    });
+    expect(textContent(result)).toContain("truncated");
 
     await callTool("close");
   });
