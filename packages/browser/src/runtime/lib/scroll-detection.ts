@@ -35,8 +35,22 @@ const insertMarker = (parent: Element, label: string, before: Element | null) =>
   }
 };
 
+interface MeasuredContainer {
+  element: Element;
+  totalChildren: number;
+  above: Element[];
+  below: Element[];
+  firstVisibleChild: Element | undefined;
+  lastVisibleChild: Element | undefined;
+}
+
+// HACK: every measurement happens before any mutation. Interleaving them made each hidden
+// child dirty the style tree, so the next getBoundingClientRect forced a fresh style and
+// layout pass over the whole document. Splitting the phases is safe because neither writes
+// affect layout: visibility:hidden reserves its box, and the marker is a zero-sized
+// absolutely positioned node.
 export const prepareViewportSnapshot = (): ScrollContainerResult[] => {
-  const results: ScrollContainerResult[] = [];
+  const measured: MeasuredContainer[] = [];
 
   for (const element of document.querySelectorAll("*")) {
     if (element.scrollHeight <= element.clientHeight + SCROLL_OVERFLOW_THRESHOLD_PX) continue;
@@ -48,37 +62,66 @@ export const prepareViewportSnapshot = (): ScrollContainerResult[] => {
     if (children.length < MIN_SCROLLABLE_CHILDREN) continue;
 
     const containerRect = element.getBoundingClientRect();
-    let hiddenAbove = 0;
-    let hiddenBelow = 0;
+    const above: Element[] = [];
+    const below: Element[] = [];
     let firstVisibleChild: Element | undefined;
     let lastVisibleChild: Element | undefined;
 
     for (const child of children) {
       const childRect = child.getBoundingClientRect();
       if (childRect.bottom < containerRect.top) {
-        if (hideChild(child, "above")) hiddenAbove++;
+        above.push(child);
       } else if (childRect.top > containerRect.bottom) {
-        if (hideChild(child, "below")) hiddenBelow++;
+        below.push(child);
       } else {
         if (!firstVisibleChild) firstVisibleChild = child;
         lastVisibleChild = child;
       }
     }
 
+    if (above.length === 0 && below.length === 0) continue;
+
+    measured.push({
+      element,
+      totalChildren: children.length,
+      above,
+      below,
+      firstVisibleChild,
+      lastVisibleChild,
+    });
+  }
+
+  const results: ScrollContainerResult[] = [];
+
+  for (const container of measured) {
+    let hiddenAbove = 0;
+    let hiddenBelow = 0;
+
+    for (const child of container.above) {
+      if (hideChild(child, "above")) hiddenAbove++;
+    }
+    for (const child of container.below) {
+      if (hideChild(child, "below")) hiddenBelow++;
+    }
+
     if (hiddenAbove === 0 && hiddenBelow === 0) continue;
 
-    if (hiddenAbove > 0 && firstVisibleChild) {
-      insertMarker(element, `${hiddenAbove} items hidden above`, firstVisibleChild);
-    }
-    if (hiddenBelow > 0 && lastVisibleChild) {
+    if (hiddenAbove > 0 && container.firstVisibleChild) {
       insertMarker(
-        element,
+        container.element,
+        `${hiddenAbove} items hidden above`,
+        container.firstVisibleChild,
+      );
+    }
+    if (hiddenBelow > 0 && container.lastVisibleChild) {
+      insertMarker(
+        container.element,
         `${hiddenBelow} items hidden below`,
-        lastVisibleChild.nextSibling as Element | null,
+        container.lastVisibleChild.nextSibling as Element | null,
       );
     }
 
-    results.push({ totalChildren: children.length, hiddenAbove, hiddenBelow });
+    results.push({ totalChildren: container.totalChildren, hiddenAbove, hiddenBelow });
   }
 
   return results;

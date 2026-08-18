@@ -248,6 +248,35 @@ describe("viewport-aware snapshot", () => {
     });
   });
 
+  describe("sibling scroll containers", () => {
+    it("should filter every container, not only the first one measured", async () => {
+      const items = (label: string) =>
+        Array.from({ length: 20 }, (_, index) => `<button>${label} ${index + 1}</button>`).join(
+          "\n",
+        );
+
+      await page.setContent(`
+        <html><body>
+          <div style="height: 100px; overflow-y: auto; display: flex; flex-direction: column;" aria-label="First">
+            ${items("First")}
+          </div>
+          <div style="height: 100px; overflow-y: auto; display: flex; flex-direction: column;" aria-label="Second">
+            ${items("Second")}
+          </div>
+        </body></html>
+      `);
+
+      const result = await run(snapshotPage(page, { viewportAware: true }));
+
+      expect(result.tree).toContain("items hidden below");
+      expect(result.stats.totalNodes).toBeGreaterThan(result.stats.visibleNodes ?? 0);
+      expect(result.tree).toContain("First 1");
+      expect(result.tree).toContain("Second 1");
+      expect(result.tree).not.toContain("First 20");
+      expect(result.tree).not.toContain("Second 20");
+    });
+  });
+
   describe("ref assignment with viewport-aware filtering", () => {
     it("should assign refs only to visible elements", async () => {
       await page.setContent(SCROLLABLE_PAGE);
