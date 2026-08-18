@@ -134,8 +134,8 @@ const buildExpectGuide = (): string =>
     "1. open: launch a browser and navigate to a URL. Pass headed=true to show the browser window. Pass cookies=true to reuse local browser cookies. Pass browser='webkit' or browser='firefox' for cross-browser testing. Pass cdp='ws://...' to connect to an existing Chrome instance.",
     "2. playwright: execute Playwright code in Node.js context. Globals: page (Page), context (BrowserContext), browser (Browser), ref (function: snapshot ref ID → Locator). Use `return` to collect data from the page — the response is JSON: { result: <your value>, resultFile: '<path>' }. The result is also written to a tmp file you can read or grep later. Batch multiple actions AND data collection into a single playwright call. Set snapshotAfter=true to auto-snapshot after DOM-changing actions (response adds snapshot alongside result).",
     "3. screenshot: capture page state. Modes: 'snapshot' (ARIA accessibility tree with element refs — preferred for interaction), 'screenshot' (PNG image), 'annotated' (PNG with numbered labels on interactive elements). Pass fullPage=true for full scrollable content.",
-    "4. console_logs: get browser console messages. Filter by type ('error', 'warning', 'log'). Pass clear=true to reset after reading.",
-    "5. network_requests: get captured HTTP requests with automatic issue detection (4xx/5xx failures, duplicate requests, mixed content). Filter by method, URL, or resource type.",
+    "4. console_logs: get browser console messages, including uncaught exceptions and unhandled promise rejections (type 'error', with their stack). Filter by type ('error', 'warning', 'log'). Pass clear=true to reset after reading.",
+    "5. network_requests: get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Filter by method, URL, or resource type.",
     "6. performance_metrics: collect Core Web Vitals (FCP, LCP, CLS, INP), navigation timing (TTFB), Long Animation Frames (LoAF) with script attribution, and resource breakdown.",
     "7. accessibility_audit: run a WCAG accessibility audit using axe-core + IBM Equal Access. Returns violations sorted by severity with CSS selectors, HTML context, and fix guidance.",
     "8. close: close the browser and end the session. Always call this when done — it flushes the session video and screenshots to disk.",
@@ -443,7 +443,7 @@ export const createBrowserMcpServer = <E>(
     {
       title: "Console Logs",
       description:
-        "Get browser console log messages. Optionally filter by log type (log, warning, error, info, debug).",
+        "Get browser console log messages, including uncaught exceptions and unhandled promise rejections (reported as type 'error' with their stack). Optionally filter by log type (log, warning, error, info, debug).",
       annotations: { readOnlyHint: true },
       inputSchema: {
         type: z
@@ -483,7 +483,7 @@ export const createBrowserMcpServer = <E>(
     {
       title: "Network Requests",
       description:
-        "Get captured network requests with automatic issue detection. Flags failed requests (4xx/5xx), duplicate requests (same URL+method within 500ms), and mixed content (HTTP on HTTPS pages). Optionally filter by HTTP method, URL substring, or resource type.",
+        "Get captured network requests with automatic issue detection. Flags failed requests (4xx/5xx, plus transport failures such as CORS, DNS or connection errors, reported with the browser's reason), duplicate requests (same URL+method within 500ms), and mixed content (HTTP on HTTPS pages). Optionally filter by HTTP method, URL substring, or resource type.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         method: z.string().optional().describe("Filter by HTTP method (e.g. 'GET', 'POST')"),
@@ -514,7 +514,8 @@ export const createBrowserMcpServer = <E>(
           if (entries.length === 0) return textResult("No network requests captured.");
 
           const failed = entries.filter(
-            (entry) => entry.status !== undefined && entry.status >= 400,
+            (entry) =>
+              (entry.status !== undefined && entry.status >= 400) || entry.failure !== undefined,
           );
 
           const duplicateMap = new Map<string, { url: string; method: string; count: number }>();
@@ -551,6 +552,7 @@ export const createBrowserMcpServer = <E>(
               url: entry.url,
               method: entry.method,
               status: entry.status,
+              ...(entry.failure !== undefined && { failure: entry.failure }),
             })),
             duplicateRequests: duplicates,
             mixedContent: mixedContent.map((entry) => entry.url),

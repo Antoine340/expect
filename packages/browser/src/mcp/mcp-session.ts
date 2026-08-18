@@ -45,6 +45,7 @@ interface NetworkEntry {
   readonly url: string;
   readonly method: string;
   status: number | undefined;
+  failure: string | undefined;
   readonly resourceType: string;
   readonly timestamp: number;
 }
@@ -101,11 +102,15 @@ const resolvePendingRequest = (
   pendingRequests: Map<string, NetworkEntry[]>,
   key: string,
   status: number | undefined,
+  failure?: string,
 ) => {
   const pending = pendingRequests.get(key);
   if (!pending) return;
   const entry = pending.shift();
-  if (entry) entry.status = status;
+  if (entry) {
+    entry.status = status;
+    entry.failure = failure;
+  }
   if (pending.length === 0) pendingRequests.delete(key);
 };
 
@@ -125,6 +130,21 @@ const setupPageTracking = (page: Page, sessionData: BrowserSessionData) => {
     );
   });
 
+  // HACK: uncaught exceptions and unhandled rejections never reach page.on("console"), so a
+  // throwing page reads as clean. Recorded as "error" so the documented type='error' filter
+  // surfaces them without agents having to learn a new type.
+  page.on("pageerror", (error) => {
+    pushBounded(
+      sessionData.consoleMessages,
+      {
+        type: "error",
+        text: error.stack ?? error.message,
+        timestamp: Date.now(),
+      },
+      MAX_BUFFERED_CONSOLE_MESSAGES,
+    );
+  });
+
   const pendingRequests = new Map<string, NetworkEntry[]>();
 
   page.on("request", (request) => {
@@ -132,6 +152,7 @@ const setupPageTracking = (page: Page, sessionData: BrowserSessionData) => {
       url: request.url(),
       method: request.method(),
       status: undefined,
+      failure: undefined,
       resourceType: request.resourceType(),
       timestamp: Date.now(),
     };
@@ -154,7 +175,12 @@ const setupPageTracking = (page: Page, sessionData: BrowserSessionData) => {
   });
 
   page.on("requestfailed", (request) => {
-    resolvePendingRequest(pendingRequests, `${request.method()}:${request.url()}`, undefined);
+    resolvePendingRequest(
+      pendingRequests,
+      `${request.method()}:${request.url()}`,
+      undefined,
+      request.failure()?.errorText,
+    );
   });
 
   page.once("close", () => {

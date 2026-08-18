@@ -323,3 +323,44 @@ describe("MCP server tools", () => {
     await callTool("close");
   });
 });
+
+describe("page observability", () => {
+  it("reports uncaught exceptions and unhandled rejections in console_logs", async () => {
+    await callTool("open", { url: testServerUrl });
+    await callTool("playwright", {
+      code: `await page.evaluate(() => {
+        setTimeout(() => { throw new Error('uncaught boom'); }, 0);
+        setTimeout(() => { Promise.reject(new Error('rejected boom')); }, 0);
+      });
+      await page.waitForTimeout(300);`,
+    });
+
+    const logs = JSON.parse(textContent(await callTool("console_logs", { type: "error" })));
+    const texts = logs.messages.map((message: { text: string }) => message.text).join("\n");
+    expect(texts).toContain("uncaught boom");
+    expect(texts).toContain("rejected boom");
+
+    await callTool("close");
+  });
+
+  it("records the browser reason for a request that never gets a response", async () => {
+    await callTool("open", { url: testServerUrl });
+    await callTool("playwright", {
+      code: `await page.evaluate(() => fetch('http://127.0.0.1:1/unreachable').catch(() => {}));
+      await page.waitForTimeout(500);`,
+    });
+
+    const requests = JSON.parse(
+      textContent(await callTool("network_requests", { url: "unreachable" })),
+    );
+    const entry = requests.requests.find((request: { url: string }) =>
+      request.url.includes("unreachable"),
+    );
+    expect(entry).toBeDefined();
+    expect(entry.failure).toBeTruthy();
+    expect(requests.issues.failedRequests).toHaveLength(1);
+    expect(requests.issues.failedRequests[0].failure).toBe(entry.failure);
+
+    await callTool("close");
+  });
+});

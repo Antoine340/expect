@@ -13,8 +13,8 @@ The Expect MCP server provides eight tools for browser-based testing and validat
 | **open**                  | Navigate to a URL, launching a browser if needed. Supports headed mode, cookie syncing from local browsers, CDP connections, and cross-browser engines (Chromium, WebKit, Firefox). |
 | **playwright**            | Execute Playwright code in the Node.js context with access to `page`, `context`, `browser`, and `ref()` globals. Use `return` to collect data. Supports `snapshotAfter` for automatic ARIA snapshots after DOM changes. |
 | **screenshot**            | Capture the current page state. Modes: `screenshot` (PNG image), `snapshot` (ARIA accessibility tree with element refs), `annotated` (PNG with numbered labels on interactive elements). |
-| **console_logs**          | Get browser console log messages. Filter by type (`error`, `warning`, `log`). Optionally clear after reading.                                 |
-| **network_requests**      | Get captured HTTP requests with automatic issue detection — flags 4xx/5xx failures, duplicate requests, and mixed content.                     |
+| **console_logs**          | Get browser console log messages, including uncaught exceptions and unhandled promise rejections (reported as type `error` with their stack). Filter by type (`error`, `warning`, `log`). Optionally clear after reading. |
+| **network_requests**      | Get captured HTTP requests with automatic issue detection — flags 4xx/5xx failures, transport failures (CORS, DNS, connection) with the browser's reason, duplicate requests, and mixed content. |
 | **performance_metrics**   | Collect Core Web Vitals (FCP, LCP, CLS, INP), navigation timing (TTFB), Long Animation Frames (LoAF) with script attribution, and resource breakdown. |
 | **accessibility_audit**   | Run a WCAG accessibility audit using axe-core + IBM Equal Access. Returns violations sorted by severity with CSS selectors and fix guidance.   |
 | **close**                 | Close the browser and end the session. Flushes session video and screenshots to disk.                                                          |

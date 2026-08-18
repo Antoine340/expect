@@ -81,6 +81,7 @@ describe("McpSession cookie pre-extraction", () => {
         } as never,
         page: {
           on: () => {},
+          once: () => {},
           isClosed: () => false,
           video: () => undefined,
         } as never,
@@ -137,6 +138,7 @@ describe("McpSession cookie pre-extraction", () => {
         } as never,
         page: {
           on: () => {},
+          once: () => {},
           isClosed: () => false,
           video: () => undefined,
         } as never,
