@@ -3,8 +3,8 @@
 Analyse mesurée du coût par appel d'outil, hors temps de démarrage (déjà traité :
 `94cdfbd0` playwright paresseux, `78fdbabf` télémétrie retirée).
 
-Statut : points 1 et 2 **appliqués** (`b4606435`, `e025c756`), points 3 et 4 en
-attente.
+Statut : points 1 à 3 **appliqués** (`b4606435`, `e025c756`, `ffdc734a`), point 4
+en attente.
 
 > **Correction.** Les chiffres de payload ci-dessous ont d'abord été obtenus en
 > simulant le pipeline hors du serveur. Mesurés à travers le vrai serveur MCP,
@@ -87,13 +87,21 @@ nécessaire.
    cinq frames : 445,6 KB → 9,9 KB injectés par frame, heap 3,82 → 2,40 MB,
    navigation médiane 12,3 → 9,4 ms. React et les polices ne polluent plus la
    page que `performance_metrics` mesure.
-3. **`boxes: true` uniquement quand nécessaire** — `SnapshotOptions.boxes`,
-   défaut `false`, `annotatedScreenshot` le passe à `true`.
-4. **Séparer lectures et écritures dans `prepareViewportSnapshot`** — collecter
-   tous les rects avant d'appliquer les `visibility`.
+3. ~~**Séparer lectures et écritures dans `prepareViewportSnapshot`**~~ — fait
+   dans `ffdc734a`. Mesuré sur une page à 20 conteneurs scrollables, 1 120
+   enfants masqués, sortie identique : 7,70 → 1,90 ms.
+4. **`boxes: true` uniquement quand nécessaire** — `SnapshotOptions.boxes`,
+   défaut `false`, `annotatedScreenshot` le passe à `true`. Reste à faire.
 
-Le point 1 change le contrat vu par l'agent : `refs` disparaît de la réponse.
+Le point 1 a changé le contrat vu par l'agent : `refs` a disparu de la réponse.
 Le guide dirige déjà l'agent vers les `[ref=eN]` de l'arbre.
+
+## Piste ouverte
+
+Exposer `depth` au tool `screenshot` — le mode `ai` de Playwright le supporte
+nativement. Sur `github.com` et `news.ycombinator.com` le snapshot reste
+au-dessus du seuil d'avertissement de 10 000 tokens, et l'agent n'a aucun moyen
+de cadrer lui-même.
 
 ## Références
 
