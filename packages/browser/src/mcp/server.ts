@@ -142,7 +142,7 @@ const buildExpectGuide = (): string =>
     "2. playwright: execute Playwright code in Node.js context. Globals: page (Page), context (BrowserContext), browser (Browser), ref (function: snapshot ref ID → Locator). Use `return` to collect data from the page — the response is JSON: { result: <your value>, resultFile: '<path>' }. The result is also written to a tmp file you can read or grep later. Batch multiple actions AND data collection into a single playwright call. Set snapshotAfter=true to auto-snapshot after DOM-changing actions (response adds snapshot alongside result).",
     "3. screenshot: capture page state. Modes: 'snapshot' (ARIA accessibility tree with element refs — preferred for interaction), 'screenshot' (PNG image), 'annotated' (PNG with numbered labels on interactive elements). Pass fullPage=true for full scrollable content. Pass depth=N on a snapshot to keep only the top N levels.",
     "4. console_logs: get browser console messages, including uncaught exceptions and unhandled promise rejections (type 'error', with their stack). Filter by type ('error', 'warning', 'log'). Pass clear=true to reset after reading.",
-    "5. network_requests: get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Filter by method, URL, or resource type.",
+    "5. network_requests: get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Each entry carries the body it sent, with secret-looking keys redacted. Filter by method, URL, or resource type.",
     "6. performance_metrics: collect Core Web Vitals (FCP, LCP, CLS, INP), navigation timing (TTFB), Long Animation Frames (LoAF) with script attribution, and resource breakdown.",
     "7. accessibility_audit: run a WCAG accessibility audit using axe-core + IBM Equal Access. Returns violations sorted by severity with CSS selectors, HTML context, and fix guidance.",
     "8. close: close the browser and end the session. Always call this when done — it flushes the session video and screenshots to disk.",
@@ -183,6 +183,7 @@ const buildExpectGuide = (): string =>
     "",
     "<best_practices>",
     "- After each interaction step, call console_logs with type='error' to catch unexpected errors.",
+    "- network_requests reports what each request sent but never what it received. To check a response body, install the listener in the same playwright call, BEFORE the action that triggers it: const bodies = []; page.on('response', async (r) => { if (r.url().includes('/api/')) bodies.push({ url: r.url(), status: r.status(), body: await r.text().catch(() => undefined) }); }); await ref('e5').click(); await page.waitForTimeout(500); return bodies;",
     "- Use accessibility_audit before concluding a test session to catch WCAG violations.",
     "- Use performance_metrics to check for Core Web Vitals issues.",
     "- When testing forms, use adversarial input: Unicode (umlauts, CJK, RTL), boundary values (0, -1, 999999999), long strings (200+ chars), and XSS payloads.",
@@ -516,7 +517,7 @@ export const createBrowserMcpServer = <E>(
     {
       title: "Network Requests",
       description:
-        "Get captured network requests with automatic issue detection. Flags failed requests (4xx/5xx, plus transport failures such as CORS, DNS or connection errors, reported with the browser's reason), duplicate requests (same URL+method within 500ms), and mixed content (HTTP on HTTPS pages). Optionally filter by HTTP method, URL substring, or resource type.",
+        "Get captured network requests with automatic issue detection. Flags failed requests (4xx/5xx, plus transport failures such as CORS, DNS or connection errors, reported with the browser's reason), duplicate requests (same URL+method within 500ms), and mixed content (HTTP on HTTPS pages). Each entry carries the request body it sent, with secret-looking keys redacted. Response bodies are not captured — collect one with page.on('response') in the playwright tool before the action that triggers it. Optionally filter by HTTP method, URL substring, or resource type.",
       annotations: { readOnlyHint: true },
       inputSchema: {
         method: z.string().optional().describe("Filter by HTTP method (e.g. 'GET', 'POST')"),

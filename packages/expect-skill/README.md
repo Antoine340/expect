@@ -66,7 +66,19 @@ These are the ONLY tools you should use for browser interactions. Do NOT use any
 2. **playwright** — Execute Playwright code in Node.js context. Globals: `page`, `context`, `browser`, `ref` (snapshot ref ID → Locator). Use `return` to collect data — response is JSON: `{ result: <value>, resultFile: '<path>' }`. The result file persists until `close` so you can read or grep it later. Batch multiple actions AND data collection into a single `playwright` call. Set `snapshotAfter=true` to auto-snapshot after DOM-changing actions (response adds `snapshot` alongside result).
 3. **screenshot** — Capture page state. Modes: `snapshot` (ARIA accessibility tree with element refs — preferred), `screenshot` (PNG image), `annotated` (PNG with numbered labels on interactive elements). Pass `fullPage=true` for full scrollable content. Pass `depth=N` on a snapshot to keep only the top N levels.
 4. **console_logs** — Get browser console messages, including uncaught exceptions and unhandled promise rejections (reported as type `error` with their stack). Filter by type (`error`, `warning`, `log`). Pass `clear=true` to reset after reading.
-5. **network_requests** — Get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Filter by method, URL, or resource type.
+5. **network_requests** — Get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Each entry carries the body it sent, with secret-looking keys redacted. Filter by method, URL, or resource type.
+
+   It never reports what a request *received*. To check a response body, install the listener in the same `playwright` call, **before** the action that triggers it:
+
+   ```js
+   const bodies = [];
+   page.on('response', async (r) => {
+     if (r.url().includes('/api/')) bodies.push({ url: r.url(), status: r.status(), body: await r.text().catch(() => undefined) });
+   });
+   await ref('e5').click();
+   await page.waitForTimeout(500);
+   return bodies;
+   ```
 6. **performance_metrics** — Collect Core Web Vitals (FCP, LCP, CLS, INP), navigation timing (TTFB), Long Animation Frames (LoAF) with script attribution, and resource breakdown.
 7. **accessibility_audit** — Run a WCAG accessibility audit using axe-core + IBM Equal Access. Returns violations sorted by severity with CSS selectors, HTML context, and fix guidance.
 8. **close** — Close the browser and end the session. Always call this when done — it flushes the session video and screenshots to disk.

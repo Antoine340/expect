@@ -416,6 +416,29 @@ describe("page observability", () => {
     await callTool("close");
   });
 
+  it("reports what a request sent, without its credentials", async () => {
+    await callTool("open", { url: testServerUrl });
+    await callTool("playwright", {
+      code: `await page.evaluate(() => fetch('/signin', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: 'user@example.com', password: 'hunter2' }),
+      }));
+      await page.waitForTimeout(300);`,
+    });
+
+    const requests = JSON.parse(textContent(await callTool("network_requests", { url: "signin" })));
+    const entry = requests.requests.find((request: { url: string }) =>
+      request.url.includes("signin"),
+    );
+
+    expect(entry).toBeDefined();
+    expect(entry.requestBody).toContain("user@example.com");
+    expect(entry.requestBody).not.toContain("hunter2");
+
+    await callTool("close");
+  });
+
   it("records the browser reason for a request that never gets a response", async () => {
     await callTool("open", { url: testServerUrl });
     await callTool("playwright", {

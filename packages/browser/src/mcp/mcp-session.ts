@@ -10,6 +10,7 @@ import { NavigationError } from "../errors";
 import { launchSystemChrome, killChromeProcess } from "../chrome-launcher";
 import { ChromeProfileNotFoundError } from "../errors";
 import { evaluateRuntime } from "../utils/evaluate-runtime";
+import { redactRequestBody } from "../utils/redact-request-body";
 import {
   AGENT_OVERLAY_CONTAINER_ID,
   BROWSER_CLOSE_TIMEOUT_MS,
@@ -47,6 +48,7 @@ interface NetworkEntry {
   status: number | undefined;
   failure: string | undefined;
   readonly resourceType: string;
+  readonly requestBody: string | undefined;
   readonly timestamp: number;
 }
 
@@ -156,6 +158,7 @@ const setupPageTracking = (page: Page, sessionData: BrowserSessionData) => {
       status: undefined,
       failure: undefined,
       resourceType: request.resourceType(),
+      requestBody: redactRequestBody(request.postData(), request.headers()["content-type"]),
       timestamp: Date.now(),
     };
     pushBounded(sessionData.networkRequests, entry, MAX_BUFFERED_NETWORK_REQUESTS);
