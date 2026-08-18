@@ -3,7 +3,12 @@
 Analyse mesurée du coût par appel d'outil, hors temps de démarrage (déjà traité :
 `94cdfbd0` playwright paresseux, `78fdbabf` télémétrie retirée).
 
-Statut : **analysé, non implémenté.** Mis de côté à la demande de l'utilisateur.
+Statut : point 1 **appliqué** (`b4606435`), points 2 à 4 en attente.
+
+> **Correction.** Les chiffres de payload ci-dessous ont d'abord été obtenus en
+> simulant le pipeline hors du serveur. Mesurés à travers le vrai serveur MCP,
+> ils étaient plus bas — parce que `safeJsonStringify` tronquait silencieusement
+> l'arbre à 10 000 caractères. Voir « Troncature silencieuse » plus bas.
 
 ## Méthode
 
@@ -40,19 +45,42 @@ réponse est tronquée. C'est un défaut fonctionnel, pas seulement une lenteur.
 Playwright MCP ne renvoie que l'arbre avec les refs inline, sans carte
 parallèle — ce qui confirme la redondance de notre champ `refs`.
 
+## Troncature silencieuse de l'arbre (découverte à la vérification)
+
+`safeJsonStringify` coupe toute chaîne dépassant `MAX_STRINGIFY_LENGTH`
+(10 000 caractères). Ce garde-fou vise les valeurs arbitraires renvoyées par le
+code `playwright`, mais il s'appliquait aussi à l'arbre du snapshot. Sur
+`news.ycombinator.com`, l'agent recevait 10 000 caractères sur ~55 000, coupés
+au milieu d'un nœud, pendant que `stats` annonçait la taille complète.
+
+Mesures réelles à travers le serveur MCP, avant → après `b4606435` :
+
+| site | avant (arbre coupé) | après (arbre complet) |
+| --- | --- | --- |
+| news.ycombinator.com | 18 503 tok | 14 298 tok |
+| github.com/microsoft/playwright | 14 229 tok | 13 272 tok |
+| playwright.dev/docs/intro | 10 603 tok | 8 388 tok |
+
+Les trois passent sous la limite dure de 25 000 tokens ; les deux premiers
+restent au-dessus du seuil d'avertissement de 10 000, ce qui plaide pour
+exposer `depth` au tool `screenshot`.
+
+`stats.estimatedTokens` ne mesurait que l'arbre. Une fois `refs` et
+l'indentation retirés, il tombe à 4 % du payload réel — aucune correction
+nécessaire.
+
 ## Hypothèses invalidées par la mesure
 
 - **Court-circuiter l'overlay en headless** : 0,2 ms par aller-retour CDP.
   Aucun gain, malgré 5 à 10 allers-retours par appel `playwright`.
 - **Empreinte mémoire des screenshots** : 0,18 à 0,75 MB. Rien à optimiser.
 
-## Plan retenu (non appliqué)
+## Plan
 
-1. **Alléger la réponse snapshot** — retirer l'indentation de
-   `safeJsonStringify`, ne plus envoyer `box` à l'agent (le garder dans le
-   `RefMap` interne pour `annotatedScreenshot`), retirer `refs` de la réponse
-   MCP, mettre `buildExpectGuide` à jour. Corriger `estimatedTokens` qui ne
-   compte que l'arbre et sous-estime le coût réel d'un facteur ~4.
+1. ~~**Alléger la réponse snapshot**~~ — fait dans `b4606435` : arbre exempté de
+   la troncature, `refs` retiré de la réponse MCP (conservé dans
+   `SnapshotResult` pour `annotatedScreenshot`), indentation retirée des
+   réponses mais conservée pour le fichier résultat que l'agent grep.
 2. **Scinder `RUNTIME_SCRIPT`** en core (10 KB, toujours injecté) et overlay
    (442 KB, headed seulement). Effet secondaire : React et les polices cessent
    de polluer la page que `performance_metrics` mesure — l'observateur LCP
