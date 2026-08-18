@@ -27,7 +27,6 @@ import { compactTree } from "./utils/compact-tree";
 import { createLocator } from "./utils/create-locator";
 import { dropRootWrapper } from "./utils/drop-root-wrapper";
 import { evaluateRuntime } from "./utils/evaluate-runtime";
-import { getIndentLevel } from "./utils/get-indent-level";
 import { parseAriaAttributes, stripAriaAttributes } from "./utils/parse-aria-attributes";
 import { parseAriaLine } from "./utils/parse-aria-line";
 import { computeSnapshotStats } from "./utils/snapshot-stats";
@@ -329,7 +328,15 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
 
       const rawTree = yield* Effect.ensuring(
         Effect.tryPromise({
-          try: () => page.locator(selector).ariaSnapshot({ mode: "ai", boxes: true, timeout }),
+          try: () =>
+            page.locator(selector).ariaSnapshot({
+              mode: "ai",
+              boxes: options.boxes ?? false,
+              // HACK: Playwright reads depth 0 as unlimited, the opposite of what a caller
+              // asking for zero levels means, so it is clamped to the shallowest real tree.
+              ...(options.depth !== undefined && { depth: Math.max(1, options.depth) }),
+              timeout,
+            }),
           catch: (cause) =>
             new SnapshotTimeoutError({
               selector,
@@ -356,8 +363,6 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
       let refCount = 0;
 
       for (const line of dropRootWrapper(rawTree.split("\n"))) {
-        if (options.maxDepth !== undefined && getIndentLevel(line) > options.maxDepth) continue;
-
         const parsed = parseAriaLine(line);
         if (Option.isNone(parsed)) {
           if (!options.interactive) filteredLines.push(stripAriaAttributes(line, false));
@@ -408,7 +413,9 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
       page: Page,
       options: AnnotatedScreenshotOptions = {},
     ) {
-      const snapshotResult = yield* snapshot(page, options);
+      // HACK: the numbered labels are placed from the refs' bounding boxes, so this is the one
+      // caller that needs them; every other snapshot pays neither the layout nor the payload.
+      const snapshotResult = yield* snapshot(page, { ...options, boxes: true });
 
       const annotations: Annotation[] = [];
       const labelPositions: Array<{ label: number; x: number; y: number }> = [];

@@ -9,7 +9,8 @@ export interface SnapshotOptions {
   timeout?: number;
   interactive?: boolean;
   compact?: boolean;
-  maxDepth?: number;
+  depth?: number;
+  boxes?: boolean;
   selector?: string;
   cursor?: boolean;
   viewportAware?: boolean;

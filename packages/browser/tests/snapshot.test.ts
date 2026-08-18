@@ -335,7 +335,7 @@ describe("snapshot", () => {
     });
   });
 
-  describe("maxDepth filter", () => {
+  describe("depth limit", () => {
     it("should limit tree depth", async () => {
       await page.setContent(`
         <html><body>
@@ -348,12 +348,12 @@ describe("snapshot", () => {
         </body></html>
       `);
 
-      const shallow = await run(snapshotPage(page, { maxDepth: 1 }));
+      const shallow = await run(snapshotPage(page, { depth: 2 }));
       const deep = await run(snapshotPage(page));
       expect(shallow.tree.split("\n").length).toBeLessThan(deep.tree.split("\n").length);
     });
 
-    it("should return top-level elements only at depth 0", async () => {
+    it("should return top-level elements only at depth 1", async () => {
       await page.setContent(`
         <html><body>
           <h1>Title</h1>
@@ -363,12 +363,24 @@ describe("snapshot", () => {
         </body></html>
       `);
 
-      const result = await run(snapshotPage(page, { maxDepth: 0 }));
+      const result = await run(snapshotPage(page, { depth: 1 }));
       for (const line of result.tree.split("\n")) {
         if (line.trim()) {
           expect(line).toMatch(/^- /);
         }
       }
+    });
+
+    it("should not let depth 0 silently mean unlimited", async () => {
+      await page.setContent(`
+        <html><body>
+          <nav><ul><li><a href="/home">Home</a></li></ul></nav>
+        </body></html>
+      `);
+
+      const zeroDepth = await run(snapshotPage(page, { depth: 0 }));
+      const shallow = await run(snapshotPage(page, { depth: 1 }));
+      expect(zeroDepth.tree).toBe(shallow.tree);
     });
   });
 
@@ -393,7 +405,7 @@ describe("snapshot", () => {
       expect(Object.keys(result.refs).length).toBe(1);
     });
 
-    it("should apply interactive and maxDepth together", async () => {
+    it("should apply interactive and depth together", async () => {
       await page.setContent(`
         <html><body>
           <nav>
@@ -405,13 +417,13 @@ describe("snapshot", () => {
         </body></html>
       `);
 
-      const result = await run(snapshotPage(page, { interactive: true, maxDepth: 0 }));
+      const result = await run(snapshotPage(page, { interactive: true, depth: 1 }));
       const roles = Object.values(result.refs).map((entry) => entry.role);
       expect(roles).toContain("button");
       expect(roles).not.toContain("link");
     });
 
-    it("should apply compact and maxDepth together", async () => {
+    it("should apply compact and depth together", async () => {
       await page.setContent(`
         <html><body>
           <nav aria-label="Main">
@@ -428,7 +440,7 @@ describe("snapshot", () => {
         </body></html>
       `);
 
-      const result = await run(snapshotPage(page, { compact: true, maxDepth: 2 }));
+      const result = await run(snapshotPage(page, { compact: true, depth: 3 }));
       expect(result.tree).toContain("navigation");
     });
 
@@ -455,7 +467,7 @@ describe("snapshot", () => {
         snapshotPage(page, {
           interactive: true,
           compact: true,
-          maxDepth: 1,
+          depth: 2,
         }),
       );
       expect(result.tree).not.toContain("heading");

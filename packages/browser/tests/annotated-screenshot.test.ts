@@ -80,6 +80,17 @@ describe("annotatedScreenshot", () => {
     }
   });
 
+  it("requests bounding boxes for itself but not for a plain snapshot", async () => {
+    await page.goto(`${origin}/links`);
+
+    const snapshot = await Effect.runPromise(snapshotPage(page));
+    expect(Object.keys(snapshot.refs).length).toBeGreaterThan(1);
+    expect(Object.values(snapshot.refs).every((entry) => entry.box === undefined)).toBe(true);
+
+    const result = await Effect.runPromise(annotate(page));
+    expect(result.annotations.length).toBeGreaterThan(1);
+  });
+
   it("resolves duplicate-named elements to distinct annotations", async () => {
     await page.goto(`${origin}/duplicates`);
 

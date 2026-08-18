@@ -140,7 +140,7 @@ const buildExpectGuide = (): string =>
     "",
     "1. open: launch a browser and navigate to a URL. Pass headed=true to show the browser window. Pass cookies=true to reuse local browser cookies. Pass browser='webkit' or browser='firefox' for cross-browser testing. Pass cdp='ws://...' to connect to an existing Chrome instance.",
     "2. playwright: execute Playwright code in Node.js context. Globals: page (Page), context (BrowserContext), browser (Browser), ref (function: snapshot ref ID → Locator). Use `return` to collect data from the page — the response is JSON: { result: <your value>, resultFile: '<path>' }. The result is also written to a tmp file you can read or grep later. Batch multiple actions AND data collection into a single playwright call. Set snapshotAfter=true to auto-snapshot after DOM-changing actions (response adds snapshot alongside result).",
-    "3. screenshot: capture page state. Modes: 'snapshot' (ARIA accessibility tree with element refs — preferred for interaction), 'screenshot' (PNG image), 'annotated' (PNG with numbered labels on interactive elements). Pass fullPage=true for full scrollable content.",
+    "3. screenshot: capture page state. Modes: 'snapshot' (ARIA accessibility tree with element refs — preferred for interaction), 'screenshot' (PNG image), 'annotated' (PNG with numbered labels on interactive elements). Pass fullPage=true for full scrollable content. Pass depth=N on a snapshot to keep only the top N levels.",
     "4. console_logs: get browser console messages, including uncaught exceptions and unhandled promise rejections (type 'error', with their stack). Filter by type ('error', 'warning', 'log'). Pass clear=true to reset after reading.",
     "5. network_requests: get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Filter by method, URL, or resource type.",
     "6. performance_metrics: collect Core Web Vitals (FCP, LCP, CLS, INP), navigation timing (TTFB), Long Animation Frames (LoAF) with script attribution, and resource breakdown.",
@@ -151,7 +151,7 @@ const buildExpectGuide = (): string =>
     "<snapshot_workflow>",
     "Prefer screenshot mode 'snapshot' for observing page state. Use 'screenshot' or 'annotated' only for purely visual checks.",
     "",
-    "1. Call screenshot with mode='snapshot' to get the ARIA tree with refs like [ref=e4].",
+    "1. Call screenshot with mode='snapshot' to get the ARIA tree with refs like [ref=e4]. On an unfamiliar or large page, start with depth=3 to map its regions for a few hundred tokens, then take a full snapshot once you know where you are working.",
     "2. Use ref() in playwright to act on elements AND collect data in a single call:",
     "   await ref('e3').fill('test@example.com'); await ref('e4').fill('password'); await ref('e5').click();",
     "   return { title: await page.title(), url: page.url(), errorCount: (await page.$$('.error')).length };",
@@ -394,9 +394,17 @@ export const createBrowserMcpServer = <E>(
           .describe(
             "Capture the full page. For screenshot/annotated: captures full scrollable page. For snapshot: includes all elements in scroll containers instead of only visible ones.",
           ),
+        depth: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            "For snapshot: limit the tree to this many levels (1 = top-level elements only). Use it to map a large page cheaply, then snapshot the region you care about with a smaller scope.",
+          ),
       },
     },
-    ({ mode, fullPage }) =>
+    ({ mode, fullPage, depth }) =>
       runMcp(
         Effect.gen(function* () {
           const session = yield* McpSession;
@@ -408,7 +416,7 @@ export const createBrowserMcpServer = <E>(
           if (resolvedMode === "snapshot") {
             const result = yield* overlay.withHidden(
               page,
-              session.snapshot(page, { viewportAware: !fullPage }),
+              session.snapshot(page, { viewportAware: !fullPage, depth }),
             );
             yield* session.updateLastSnapshot(result);
             return jsonResult({ tree: result.tree, stats: result.stats });
