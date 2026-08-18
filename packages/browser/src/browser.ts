@@ -281,6 +281,21 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
       const selector = options.selector ?? "body";
       const useViewportAware = options.viewportAware ?? true;
 
+      // HACK: unlike the default mode, ariaSnapshot({ mode: "ai" }) does not wait for the target
+      // and throws at once when it is missing, so an explicit selector needs its own wait. It runs
+      // before the viewport preparation, which would otherwise stay unrestored on failure.
+      if (options.selector !== undefined) {
+        yield* Effect.tryPromise({
+          try: () => page.locator(selector).waitFor({ state: "attached", timeout }),
+          catch: (cause) =>
+            new SnapshotTimeoutError({
+              selector,
+              timeoutMs: timeout,
+              cause: cause instanceof Error ? cause.message : String(cause),
+            }),
+        });
+      }
+
       const scrollContainers: ScrollContainerResult[] = useViewportAware
         ? yield* evaluateRuntime(page, "prepareViewportSnapshot").pipe(
             Effect.catchCause((cause) =>

@@ -602,4 +602,39 @@ describe("snapshot", () => {
       expect(first.refs).toEqual(second.refs);
     });
   });
+
+  describe("iframes", () => {
+    it("should not ref iframe contents, whose boxes are frame-relative", async () => {
+      await page.setContent(
+        `<html><body style="margin:0"><div style="height:200px">spacer</div><iframe style="width:400px;height:300px;border:0;display:block" srcdoc="<body style='margin:0'><div style='height:100px'>pad</div><button style='height:30px'>Inner</button></body>"></iframe></body></html>`,
+      );
+      await page.waitForTimeout(300);
+
+      const result = await run(snapshotPage(page));
+
+      expect(result.tree).toContain("Inner");
+      expect(Object.values(result.refs).map((entry) => entry.name)).not.toContain("Inner");
+      expect(Object.keys(result.refs).every((ref) => /^e\d+$/.test(ref))).toBe(true);
+    });
+  });
+
+  describe("explicit selector", () => {
+    it("should wait for a selector that appears after load", async () => {
+      await page.setContent(
+        `<html><body><script>setTimeout(() => { const el = document.createElement('button'); el.id = 'late'; el.textContent = 'Late'; document.body.append(el); }, 300);</script></body></html>`,
+      );
+
+      const result = await run(snapshotPage(page, { selector: "#late", timeout: 5000 }));
+      expect(result.tree).toContain("Late");
+    });
+
+    it("should fail with a snapshot timeout when the selector never appears", async () => {
+      await page.setContent("<html><body><p>Nothing</p></body></html>");
+
+      const error = await run(
+        Effect.flip(snapshotPage(page, { selector: "#absent", timeout: 1000 })),
+      );
+      expect((error as { _tag: string })._tag).toBe("SnapshotTimeoutError");
+    });
+  });
 });

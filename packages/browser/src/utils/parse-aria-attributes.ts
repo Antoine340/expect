@@ -6,7 +6,10 @@ export interface AriaLineAttributes {
   cursorPointer: boolean;
 }
 
-const REF_REGEX = /\[ref=([^\]]+)\]/;
+// HACK: ariaSnapshot({ mode: "ai" }) descends into iframes and refs their contents as `f<n>e<n>`,
+// whose [box=...] is relative to the frame, not the page. Matching only page-level refs keeps the
+// iframe content visible in the tree while leaving it unreferenceable, as before the ai mode.
+const REF_REGEX = /\[ref=(e\d+)\]/;
 const BOX_REGEX = /\[box=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)\]/;
 const CURSOR_POINTER = "[cursor=pointer]";
 
