@@ -138,7 +138,7 @@ const buildExpectGuide = (): string =>
     "<expect_mcp_tools>",
     "Use these tools for browser interactions. They are provided by the expect MCP server.",
     "",
-    "1. open: launch a browser and navigate to a URL. Pass headed=true to show the browser window. Pass cookies=true to reuse local browser cookies. Pass browser='webkit' or browser='firefox' for cross-browser testing. Pass cdp='ws://...' to connect to an existing Chrome instance.",
+    "1. open: launch a browser and navigate to a URL. Pass headed=true to show the browser window. Pass cookies=true to reuse local browser cookies. Pass browser='webkit' or browser='firefox' for cross-browser testing. Pass cdp='ws://...' to connect to an existing Chrome instance. Pass locale='fr-FR' or deviceScaleFactor=2 to match the users you are testing for — both are fixed for the life of the browser, so decide before opening.",
     "2. playwright: execute Playwright code in Node.js context. Globals: page (Page), context (BrowserContext), browser (Browser), ref (function: snapshot ref ID → Locator). Use `return` to collect data from the page — the response is JSON: { result: <your value>, resultFile: '<path>' }. The result is also written to a tmp file you can read or grep later. Batch multiple actions AND data collection into a single playwright call. Set snapshotAfter=true to auto-snapshot after DOM-changing actions (response adds snapshot alongside result).",
     "3. screenshot: capture page state. Modes: 'snapshot' (ARIA accessibility tree with element refs — preferred for interaction), 'screenshot' (PNG image), 'annotated' (PNG with numbered labels on interactive elements). Pass fullPage=true for full scrollable content. Pass depth=N on a snapshot to keep only the top N levels.",
     "4. console_logs: get browser console messages, including uncaught exceptions and unhandled promise rejections (type 'error', with their stack). Filter by type ('error', 'warning', 'log'). Pass clear=true to reset after reading.",
@@ -187,6 +187,7 @@ const buildExpectGuide = (): string =>
     "- Use performance_metrics to check for Core Web Vitals issues.",
     "- When testing forms, use adversarial input: Unicode (umlauts, CJK, RTL), boundary values (0, -1, 999999999), long strings (200+ chars), and XSS payloads.",
     "- For responsive testing, use page.setViewportSize() at multiple breakpoints: 375x812 (mobile), 768x1024 (tablet), 1280x800 (laptop), 1440x900 (desktop).",
+    "- The page always starts in light mode. To test dark mode, run await page.emulateMedia({ colorScheme: 'dark' }) in playwright, then snapshot; emulateMedia also covers reducedMotion and forcedColors.",
     "- Assertion-first: navigate, act, then validate before moving on. Check at least two independent signals per step (e.g. URL changed AND new content appeared).",
     "</best_practices>",
   ].join("\n");
@@ -233,9 +234,22 @@ export const createBrowserMcpServer = <E>(
           .describe(
             "Browser engine to launch (default: chromium). Use 'webkit' for Safari-like testing or 'firefox' for Firefox testing. CDP connections are only supported with chromium.",
           ),
+        locale: z
+          .string()
+          .optional()
+          .describe(
+            "BCP 47 locale for the browser context, e.g. 'fr-FR'. Sets navigator.language and Accept-Language, so an internationalised app serves that language. Defaults to Playwright's 'en-US' and cannot be changed after the browser is open.",
+          ),
+        deviceScaleFactor: z
+          .number()
+          .positive()
+          .optional()
+          .describe(
+            "Device pixel ratio, e.g. 2 for a retina display, to exercise srcset and high-DPI assets. Defaults to 1 and cannot be changed after the browser is open. In headed mode it replaces the real window size with a fixed viewport.",
+          ),
       },
     },
-    ({ url, headed, cookies, waitUntil, cdp, browser: browserType }) =>
+    ({ url, headed, cookies, waitUntil, cdp, browser: browserType, locale, deviceScaleFactor }) =>
       runMcp(
         Effect.gen(function* () {
           const session = yield* McpSession;
@@ -254,6 +268,8 @@ export const createBrowserMcpServer = <E>(
             waitUntil,
             cdpUrl: Option.fromNullishOr(cdp),
             browserType,
+            locale,
+            deviceScaleFactor,
           });
           const engineSuffix = browserType && browserType !== "chromium" ? ` [${browserType}]` : "";
           const cdpSuffix = cdp ? ` (connected via CDP: ${cdp})` : "";

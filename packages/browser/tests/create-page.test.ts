@@ -248,6 +248,32 @@ describe("Browser.createPage browserType", () => {
     expect(webkitLaunchMock).toHaveBeenCalledWith(expect.objectContaining({ args: [] }));
   });
 
+  it("gives up the real headed window when a scale factor is pinned", async () => {
+    await runBrowser((browser) =>
+      browser.createPage("https://example.com", { headed: true, deviceScaleFactor: 2 }),
+    );
+
+    const [contextOptions] = newContextMock.mock.calls[0];
+    expect(contextOptions.deviceScaleFactor).toBe(2);
+    expect(contextOptions).not.toHaveProperty("viewport");
+  });
+
+  it("keeps the real headed window when no scale factor is pinned", async () => {
+    await runBrowser((browser) => browser.createPage("https://example.com", { headed: true }));
+
+    const [contextOptions] = newContextMock.mock.calls[0];
+    expect(contextOptions.viewport).toBeNull();
+  });
+
+  it("prefers an explicit locale over the one resolved from a profile", async () => {
+    await runBrowser((browser) =>
+      browser.createPage("https://example.com", { locale: "fr-FR", cookies: true }),
+    );
+
+    const [contextOptions] = newContextMock.mock.calls[0];
+    expect(contextOptions.locale).toBe("fr-FR");
+  });
+
   it("injects only the core runtime when headless", async () => {
     await runBrowser((browser) => browser.createPage("https://example.com"));
 

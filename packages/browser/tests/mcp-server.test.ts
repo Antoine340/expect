@@ -339,6 +339,38 @@ describe("MCP server tools", () => {
   });
 });
 
+describe("browser context fidelity", () => {
+  it("serves the requested locale to the page", async () => {
+    await callTool("open", { url: testServerUrl, locale: "fr-FR" });
+    const result = await callTool("playwright", {
+      code: `return { language: await page.evaluate(() => navigator.language) };`,
+    });
+
+    expect(JSON.parse(textContent(result)).result.language).toBe("fr-FR");
+    await callTool("close");
+  });
+
+  it("applies the requested device scale factor", async () => {
+    await callTool("open", { url: testServerUrl, deviceScaleFactor: 2 });
+    const result = await callTool("playwright", {
+      code: `return { ratio: await page.evaluate(() => devicePixelRatio) };`,
+    });
+
+    expect(JSON.parse(textContent(result)).result.ratio).toBe(2);
+    await callTool("close");
+  });
+
+  it("defaults to a scale factor of 1 without the option", async () => {
+    await callTool("open", { url: testServerUrl });
+    const result = await callTool("playwright", {
+      code: `return { ratio: await page.evaluate(() => devicePixelRatio) };`,
+    });
+
+    expect(JSON.parse(textContent(result)).result.ratio).toBe(1);
+    await callTool("close");
+  });
+});
+
 describe("snapshot payload", () => {
   it("delivers the whole tree instead of clipping it at the stringify limit", async () => {
     await callTool("open", { url: `${testServerUrl}/big`, waitUntil: "domcontentloaded" });

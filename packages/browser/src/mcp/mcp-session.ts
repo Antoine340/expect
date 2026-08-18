@@ -68,6 +68,8 @@ export interface OpenOptions {
   waitUntil?: "load" | "domcontentloaded" | "networkidle" | "commit";
   cdpUrl?: Option.Option<string>;
   browserType?: BrowserEngine;
+  locale?: string;
+  deviceScaleFactor?: number;
 }
 
 export interface OpenResult {
@@ -428,6 +430,8 @@ export class McpSession extends ServiceMap.Service<McpSession>()("@browser/McpSe
         videoOutputDir,
         cdpUrl,
         browserType: engine,
+        locale: options.locale,
+        deviceScaleFactor: options.deviceScaleFactor,
       });
 
       const sessionData: BrowserSessionData = {

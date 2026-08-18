@@ -62,7 +62,7 @@ Or add it to your MCP config (`.mcp.json`, `.cursor/mcp.json`, etc.):
 
 These are the ONLY tools you should use for browser interactions. Do NOT use any other browser automation tools.
 
-1. **open** — Launch a browser and navigate to a URL. Pass `cookies=true` to reuse local browser cookies. Pass `browser='webkit'` or `browser='firefox'` for cross-browser testing. Pass `cdp='ws://...'` to connect to an existing Chrome instance.
+1. **open** — Launch a browser and navigate to a URL. Pass `cookies=true` to reuse local browser cookies. Pass `browser='webkit'` or `browser='firefox'` for cross-browser testing. Pass `cdp='ws://...'` to connect to an existing Chrome instance. Pass `locale='fr-FR'` or `deviceScaleFactor=2` to match the users you are testing for — both are fixed for the life of the browser, so decide before opening.
 2. **playwright** — Execute Playwright code in Node.js context. Globals: `page`, `context`, `browser`, `ref` (snapshot ref ID → Locator). Use `return` to collect data — response is JSON: `{ result: <value>, resultFile: '<path>' }`. The result file persists until `close` so you can read or grep it later. Batch multiple actions AND data collection into a single `playwright` call. Set `snapshotAfter=true` to auto-snapshot after DOM-changing actions (response adds `snapshot` alongside result).
 3. **screenshot** — Capture page state. Modes: `snapshot` (ARIA accessibility tree with element refs — preferred), `screenshot` (PNG image), `annotated` (PNG with numbered labels on interactive elements). Pass `fullPage=true` for full scrollable content. Pass `depth=N` on a snapshot to keep only the top N levels.
 4. **console_logs** — Get browser console messages, including uncaught exceptions and unhandled promise rejections (reported as type `error` with their stack). Filter by type (`error`, `warning`, `log`). Pass `clear=true` to reset after reading.
@@ -129,7 +129,7 @@ When the diff touches files that affect visual output (components, styles, layou
 
 1. **Responsive design**: test at these viewports using `page.setViewportSize()`: 375×812 (mobile), 768×1024 (tablet), 1280×800 (laptop), 1440×900 (desktop). Verify no horizontal overflow, no overlapping elements, text readable, interactive targets accessible.
 2. **Cross-browser (WebKit)**: close the current session, `open` with `browser='webkit'`, and re-run the primary flow. Check for flexbox gap, backdrop-filter, position:sticky in overflow, date/time inputs, scrollbar styling.
-3. **Dark mode**: detect support (Tailwind `dark:` classes, theme toggle, `prefers-color-scheme`). If supported, switch and re-verify. Check for invisible text, disappearing borders, hardcoded white backgrounds.
+3. **Dark mode**: detect support (Tailwind `dark:` classes, theme toggle, `prefers-color-scheme`). The page always starts in light mode, so switch with `await page.emulateMedia({ colorScheme: 'dark' })` in `playwright` and re-verify. Check for invisible text, disappearing borders, hardcoded white backgrounds.
 4. **Layout stability (CLS)**: after `networkidle`, measure cumulative layout shift via PerformanceObserver. CLS above 0.1 is a failure.
 
 ## Snapshot Workflow

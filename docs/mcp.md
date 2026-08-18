@@ -10,7 +10,7 @@ The Expect MCP server provides eight tools for browser-based testing and validat
 
 | Tool                      | Description                                                                                                                                    |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| **open**                  | Navigate to a URL, launching a browser if needed. Supports headed mode, cookie syncing from local browsers, CDP connections, and cross-browser engines (Chromium, WebKit, Firefox). |
+| **open**                  | Navigate to a URL, launching a browser if needed. Supports headed mode, cookie syncing from local browsers, CDP connections, cross-browser engines (Chromium, WebKit, Firefox), and context-level `locale` and `deviceScaleFactor`. |
 | **playwright**            | Execute Playwright code in the Node.js context with access to `page`, `context`, `browser`, and `ref()` globals. Use `return` to collect data. Supports `snapshotAfter` for automatic ARIA snapshots after DOM changes. |
 | **screenshot**            | Capture the current page state. Modes: `screenshot` (PNG image), `snapshot` (ARIA accessibility tree with element refs), `annotated` (PNG with numbered labels on interactive elements). `depth=N` limits a snapshot to the top N levels. |
 | **console_logs**          | Get browser console log messages, including uncaught exceptions and unhandled promise rejections (reported as type `error` with their stack). Filter by type (`error`, `warning`, `log`). Optionally clear after reading. |

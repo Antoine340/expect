@@ -60,6 +60,8 @@ export interface CreatePageOptions {
   videoOutputDir?: string;
   cdpUrl?: Option.Option<string>;
   browserType?: BrowserEngine;
+  locale?: string;
+  deviceScaleFactor?: number;
 }
 
 export interface AnnotatedScreenshotOptions extends SnapshotOptions {

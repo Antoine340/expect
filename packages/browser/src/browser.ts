@@ -189,12 +189,19 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
             ? defaultBrowserContext.preferredProfile.locale
             : undefined;
 
+        // HACK: Playwright rejects deviceScaleFactor alongside a null viewport, so pinning the
+        // scale factor costs the headed window its own size — a fixed viewport instead.
+        const usesRealWindow = Boolean(options.headed) && options.deviceScaleFactor === undefined;
         const contextOptions: Parameters<typeof browser.newContext>[0] = {
           ignoreHTTPSErrors: true,
-          ...(options.headed && { viewport: null }),
+          ...(usesRealWindow && { viewport: null }),
+          ...(options.deviceScaleFactor !== undefined && {
+            deviceScaleFactor: options.deviceScaleFactor,
+          }),
         };
-        if (profileLocale) {
-          contextOptions.locale = profileLocale;
+        const locale = options.locale ?? profileLocale;
+        if (locale) {
+          contextOptions.locale = locale;
         }
         if (options.videoOutputDir) {
           contextOptions.recordVideo = {
