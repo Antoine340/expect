@@ -7,7 +7,26 @@ const esmRequire = createRequire(import.meta.url);
 
 const watchMode = process.argv.includes("--watch");
 
-const RUNTIME_ENTRY = "src/runtime/index.ts";
+// The core bundle installs __EXPECT_RUNTIME__ and is injected into every page. The overlay
+// bundle carries React and the stylesheet, ships only in headed mode, and merges into the
+// object the core already installed — so it must be injected after it.
+const BUNDLES = [
+  {
+    entry: "src/runtime/core-runtime.ts",
+    globalName: "__EXPECT_RUNTIME__",
+    constName: "RUNTIME_CORE_SCRIPT",
+    typeNamespace: "CoreRuntime",
+    install: "globalThis.__EXPECT_RUNTIME__ = __EXPECT_RUNTIME__;\n",
+  },
+  {
+    entry: "src/runtime/overlay-runtime.ts",
+    globalName: "__EXPECT_OVERLAY_RUNTIME__",
+    constName: "RUNTIME_OVERLAY_SCRIPT",
+    typeNamespace: "OverlayRuntime",
+    install:
+      "globalThis.__EXPECT_RUNTIME__ = Object.assign(globalThis.__EXPECT_RUNTIME__ || {}, __EXPECT_OVERLAY_RUNTIME__);\n",
+  },
+];
 
 const extractExportedFunctionNames = (source) => {
   const names = [];
@@ -30,37 +49,46 @@ const extractExportedFunctionNames = (source) => {
   return names;
 };
 
-const generateRuntimeTypes = (exportNames) => {
-  const fields = exportNames.map((name) => `  ${name}: typeof Runtime.${name};`).join("\n");
-  return [
-    `import type * as Runtime from "../runtime/index";`,
-    ``,
-    `export interface ExpectRuntime {`,
-    fields,
-    `}`,
-    ``,
-  ].join("\n");
+const generateRuntimeTypes = () => {
+  const imports = BUNDLES.map(
+    (bundle) =>
+      `import type * as ${bundle.typeNamespace} from "../runtime/${path.basename(bundle.entry, ".ts")}";`,
+  );
+  const fields = BUNDLES.flatMap((bundle) =>
+    extractExportedFunctionNames(fs.readFileSync(bundle.entry, "utf-8")).map(
+      (name) => `  ${name}: typeof ${bundle.typeNamespace}.${name};`,
+    ),
+  );
+
+  return [...imports, ``, `export interface ExpectRuntime {`, ...fields, `}`, ``].join("\n");
 };
 
-const emitPlugin = {
-  name: "emit-runtime-script",
+const emittedScripts = new Map();
+
+const writeGeneratedFiles = () => {
+  if (emittedScripts.size < BUNDLES.length) return;
+
+  fs.mkdirSync("src/generated", { recursive: true });
+  fs.writeFileSync(
+    "src/generated/runtime-script.ts",
+    BUNDLES.map(
+      (bundle) =>
+        `export const ${bundle.constName} = ${JSON.stringify(emittedScripts.get(bundle.constName))};\n`,
+    ).join(""),
+  );
+  fs.writeFileSync("src/generated/runtime-types.ts", generateRuntimeTypes());
+};
+
+const emitPlugin = (bundle) => ({
+  name: `emit-${bundle.constName}`,
   setup: (build) => {
     build.onEnd((result) => {
       if (result.errors.length > 0) return;
-      const runtimeCode =
-        `${result.outputFiles[0].text}\n` + "globalThis.__EXPECT_RUNTIME__ = __EXPECT_RUNTIME__;\n";
-      fs.mkdirSync("src/generated", { recursive: true });
-      fs.writeFileSync(
-        "src/generated/runtime-script.ts",
-        `export const RUNTIME_SCRIPT = ${JSON.stringify(runtimeCode)};\n`,
-      );
-
-      const source = fs.readFileSync(RUNTIME_ENTRY, "utf-8");
-      const exportNames = extractExportedFunctionNames(source);
-      fs.writeFileSync("src/generated/runtime-types.ts", generateRuntimeTypes(exportNames));
+      emittedScripts.set(bundle.constName, `${result.outputFiles[0].text}\n${bundle.install}`);
+      writeGeneratedFiles();
     });
   },
-};
+});
 
 const cssTextPlugin = {
   name: "css-text",
@@ -79,21 +107,27 @@ const cssTextPlugin = {
   },
 };
 
-const ctx = await context({
-  entryPoints: ["src/runtime/index.ts"],
-  bundle: true,
-  format: "iife",
-  globalName: "__EXPECT_RUNTIME__",
-  write: false,
-  minify: true,
-  target: "es2020",
-  jsx: "automatic",
-  plugins: [cssTextPlugin, emitPlugin],
-});
+const contexts = await Promise.all(
+  BUNDLES.map((bundle) =>
+    context({
+      entryPoints: [bundle.entry],
+      bundle: true,
+      format: "iife",
+      globalName: bundle.globalName,
+      write: false,
+      minify: true,
+      target: "es2020",
+      jsx: "automatic",
+      plugins: [cssTextPlugin, emitPlugin(bundle)],
+    }),
+  ),
+);
 
 if (watchMode) {
-  await ctx.watch();
+  await Promise.all(contexts.map((ctx) => ctx.watch()));
 } else {
-  await ctx.rebuild();
-  await ctx.dispose();
+  for (const ctx of contexts) {
+    await ctx.rebuild();
+  }
+  await Promise.all(contexts.map((ctx) => ctx.dispose()));
 }

@@ -69,6 +69,7 @@ vi.mock("playwright", () => ({
 
 import { Effect, Option } from "effect";
 import { runBrowser } from "../src/browser";
+import { RUNTIME_CORE_SCRIPT, RUNTIME_OVERLAY_SCRIPT } from "../src/generated/runtime-script";
 
 const heliumProfile = {
   _tag: "ChromiumBrowser" as const,
@@ -245,5 +246,21 @@ describe("Browser.createPage browserType", () => {
     );
 
     expect(webkitLaunchMock).toHaveBeenCalledWith(expect.objectContaining({ args: [] }));
+  });
+
+  it("injects only the core runtime when headless", async () => {
+    await runBrowser((browser) => browser.createPage("https://example.com"));
+
+    expect(addInitScriptMock).toHaveBeenCalledOnce();
+    expect(addInitScriptMock).toHaveBeenCalledWith(RUNTIME_CORE_SCRIPT);
+  });
+
+  it("adds the overlay runtime after the core one when headed", async () => {
+    await runBrowser((browser) => browser.createPage("https://example.com", { headed: true }));
+
+    expect(addInitScriptMock.mock.calls.map(([script]) => script)).toEqual([
+      RUNTIME_CORE_SCRIPT,
+      RUNTIME_OVERLAY_SCRIPT,
+    ]);
   });
 });

@@ -31,7 +31,7 @@ import { getIndentLevel } from "./utils/get-indent-level";
 import { parseAriaAttributes, stripAriaAttributes } from "./utils/parse-aria-attributes";
 import { parseAriaLine } from "./utils/parse-aria-line";
 import { computeSnapshotStats } from "./utils/snapshot-stats";
-import { RUNTIME_SCRIPT } from "./generated/runtime-script";
+import { RUNTIME_CORE_SCRIPT, RUNTIME_OVERLAY_SCRIPT } from "./generated/runtime-script";
 import type {
   AnnotatedScreenshotOptions,
   Annotation,
@@ -127,6 +127,12 @@ const extractCookiesForBrowserKeys = Effect.fn("Browser.extractCookiesForBrowser
 const injectOverlayLabels = (page: Page, labels: Array<{ label: number; x: number; y: number }>) =>
   evaluateRuntime(page, "injectOverlayLabels", OVERLAY_CONTAINER_ID, labels);
 
+// HACK: the overlay bundle is 44x the core one — React, react-dom and a stylesheet with an
+// inlined font — and it is only ever displayed headed. Injecting it headless would run in
+// every frame of the page under test and skew the very metrics performance_metrics reports.
+const runtimeScriptsFor = (headed: boolean | undefined) =>
+  headed ? [RUNTIME_CORE_SCRIPT, RUNTIME_OVERLAY_SCRIPT] : [RUNTIME_CORE_SCRIPT];
+
 export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
   // oxlint-disable-next-line require-yield
   make: Effect.gen(function* () {
@@ -210,20 +216,26 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
                 catch: toBrowserLaunchError,
               });
 
-        yield* Effect.tryPromise({
-          try: () => context.addInitScript(RUNTIME_SCRIPT),
-          catch: toBrowserLaunchError,
-        });
+        const runtimeScripts = runtimeScriptsFor(options.headed);
+
+        yield* Effect.forEach(runtimeScripts, (script) =>
+          Effect.tryPromise({
+            try: () => context.addInitScript(script),
+            catch: toBrowserLaunchError,
+          }),
+        );
 
         if (isCdpConnected && existingContexts.length > 0) {
           const existingPages = context.pages();
           for (const existingPage of existingPages) {
-            yield* Effect.tryPromise({
-              try: () => existingPage.evaluate(RUNTIME_SCRIPT),
-              catch: toBrowserLaunchError,
-            }).pipe(
-              Effect.catchTag("BrowserLaunchError", (cause) =>
-                Effect.logDebug("Failed to inject runtime into existing CDP page", { cause }),
+            yield* Effect.forEach(runtimeScripts, (script) =>
+              Effect.tryPromise({
+                try: () => existingPage.evaluate(script),
+                catch: toBrowserLaunchError,
+              }).pipe(
+                Effect.catchTag("BrowserLaunchError", (cause) =>
+                  Effect.logDebug("Failed to inject runtime into existing CDP page", { cause }),
+                ),
               ),
             );
           }
@@ -414,7 +426,7 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
 
       yield* evaluateRuntime(page, "hideAgentOverlay", AGENT_OVERLAY_CONTAINER_ID).pipe(
         Effect.catchCause((cause) =>
-          Effect.logWarning("Failed to hide agent overlay for capture", { cause }),
+          Effect.logDebug("Failed to hide agent overlay for capture", { cause }),
         ),
       );
       yield* injectOverlayLabels(page, labelPositions);
@@ -431,7 +443,7 @@ export class Browser extends ServiceMap.Service<Browser>()("@browser/Browser", {
           Effect.tap(() =>
             evaluateRuntime(page, "showAgentOverlay", AGENT_OVERLAY_CONTAINER_ID).pipe(
               Effect.catchCause((cause) =>
-                Effect.logWarning("Failed to show agent overlay after capture", { cause }),
+                Effect.logDebug("Failed to show agent overlay after capture", { cause }),
               ),
             ),
           ),

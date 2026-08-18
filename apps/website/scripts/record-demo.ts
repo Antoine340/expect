@@ -17,22 +17,22 @@ const RUNTIME_SCRIPT_PATH = path.join(
   "generated",
   "runtime-script.ts",
 );
-const RUNTIME_MODULE = fs.readFileSync(RUNTIME_SCRIPT_PATH, "utf-8");
-const inlineExportPrefix = "export const RUNTIME_SCRIPT = ";
-const multilineExportPrefix = "export const RUNTIME_SCRIPT =\n  ";
-const runtimeScriptPrefix = RUNTIME_MODULE.startsWith(inlineExportPrefix)
-  ? inlineExportPrefix
-  : RUNTIME_MODULE.startsWith(multilineExportPrefix)
-    ? multilineExportPrefix
-    : undefined;
+const RUNTIME_MODULE_LINES = fs.readFileSync(RUNTIME_SCRIPT_PATH, "utf-8").split("\n");
 
-if (!runtimeScriptPrefix) {
-  throw new Error("Failed to parse RUNTIME_SCRIPT from generated file");
-}
+const readGeneratedScript = (constName: string): string => {
+  const prefix = `export const ${constName} = `;
+  const line = RUNTIME_MODULE_LINES.find((candidate) => candidate.startsWith(prefix));
+  if (!line) {
+    throw new Error(`Failed to parse ${constName} from generated file`);
+  }
+  return JSON.parse(line.slice(prefix.length, -1));
+};
 
-const RUNTIME_SCRIPT: string = new Function(
-  `return ${RUNTIME_MODULE.slice(runtimeScriptPrefix.length)}`,
-)();
+// The recording needs the visible cursor, so it injects the headed overlay bundle too.
+const RUNTIME_SCRIPT = [
+  readGeneratedScript("RUNTIME_CORE_SCRIPT"),
+  readGeneratedScript("RUNTIME_OVERLAY_SCRIPT"),
+].join("\n");
 
 const MANUAL_FLAG = "--manual";
 const OUTPUT_PATH = path.join(__dirname, "..", "lib", "recorded-demo-events.json");

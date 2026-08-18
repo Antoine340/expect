@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vite-plus/test";
 import { chromium } from "playwright";
 import type { Browser as PlaywrightBrowser, Page } from "playwright";
 import { Browser } from "../src/browser";
-import { RUNTIME_SCRIPT } from "../src/generated/runtime-script";
+import { RUNTIME_CORE_SCRIPT } from "../src/generated/runtime-script";
 
 const run = <A>(effect: Effect.Effect<A, unknown>) => Effect.runPromise(effect);
 
@@ -31,7 +31,7 @@ describe("viewport-aware snapshot", () => {
   beforeAll(async () => {
     playwrightBrowser = await chromium.launch({ headless: true });
     const context = await playwrightBrowser.newContext();
-    await context.addInitScript(RUNTIME_SCRIPT);
+    await context.addInitScript(RUNTIME_CORE_SCRIPT);
     page = await context.newPage();
   });
 
