@@ -3,7 +3,8 @@
 Analyse mesurée du coût par appel d'outil, hors temps de démarrage (déjà traité :
 `94cdfbd0` playwright paresseux, `78fdbabf` télémétrie retirée).
 
-Statut : point 1 **appliqué** (`b4606435`), points 2 à 4 en attente.
+Statut : points 1 et 2 **appliqués** (`b4606435`, `e025c756`), points 3 et 4 en
+attente.
 
 > **Correction.** Les chiffres de payload ci-dessous ont d'abord été obtenus en
 > simulant le pipeline hors du serveur. Mesurés à travers le vrai serveur MCP,
@@ -81,10 +82,11 @@ nécessaire.
    la troncature, `refs` retiré de la réponse MCP (conservé dans
    `SnapshotResult` pour `annotatedScreenshot`), indentation retirée des
    réponses mais conservée pour le fichier résultat que l'agent grep.
-2. **Scinder `RUNTIME_SCRIPT`** en core (10 KB, toujours injecté) et overlay
-   (442 KB, headed seulement). Effet secondaire : React et les polices cessent
-   de polluer la page que `performance_metrics` mesure — l'observateur LCP
-   contourne déjà notre propre overlay, la contamination est avérée.
+2. ~~**Scinder `RUNTIME_SCRIPT`**~~ — fait dans `e025c756` : core 9,9 KB toujours
+   injecté, overlay 435,7 KB headed seulement. Mesuré en headless sur une page à
+   cinq frames : 445,6 KB → 9,9 KB injectés par frame, heap 3,82 → 2,40 MB,
+   navigation médiane 12,3 → 9,4 ms. React et les polices ne polluent plus la
+   page que `performance_metrics` mesure.
 3. **`boxes: true` uniquement quand nécessaire** — `SnapshotOptions.boxes`,
    défaut `false`, `annotatedScreenshot` le passe à `true`.
 4. **Séparer lectures et écritures dans `prepareViewportSnapshot`** — collecter
