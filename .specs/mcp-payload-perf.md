@@ -3,8 +3,7 @@
 Analyse mesurée du coût par appel d'outil, hors temps de démarrage (déjà traité :
 `94cdfbd0` playwright paresseux, `78fdbabf` télémétrie retirée).
 
-Statut : points 1 à 3 **appliqués** (`b4606435`, `e025c756`, `ffdc734a`), point 4
-en attente.
+Statut : **terminé** — `b4606435`, `e025c756`, `ffdc734a`, `73f6ee9a`.
 
 > **Correction.** Les chiffres de payload ci-dessous ont d'abord été obtenus en
 > simulant le pipeline hors du serveur. Mesurés à travers le vrai serveur MCP,
@@ -90,18 +89,34 @@ nécessaire.
 3. ~~**Séparer lectures et écritures dans `prepareViewportSnapshot`**~~ — fait
    dans `ffdc734a`. Mesuré sur une page à 20 conteneurs scrollables, 1 120
    enfants masqués, sortie identique : 7,70 → 1,90 ms.
-4. **`boxes: true` uniquement quand nécessaire** — `SnapshotOptions.boxes`,
-   défaut `false`, `annotatedScreenshot` le passe à `true`. Reste à faire.
+4. ~~**`boxes: true` uniquement quand nécessaire**~~ — fait dans `73f6ee9a`.
+   Mesuré sur l'`ariaSnapshot` brut : page de 2 000 lignes 68,8 → 63,5 ms et
+   430 → 305 KB ; `news.ycombinator.com` 15,3 → 12,9 ms et 70 → 57 KB.
 
 Le point 1 a changé le contrat vu par l'agent : `refs` a disparu de la réponse.
 Le guide dirige déjà l'agent vers les `[ref=eN]` de l'arbre.
 
-## Piste ouverte
+## `depth` (`73f6ee9a`)
 
-Exposer `depth` au tool `screenshot` — le mode `ai` de Playwright le supporte
-nativement. Sur `github.com` et `news.ycombinator.com` le snapshot reste
-au-dessus du seuil d'avertissement de 10 000 tokens, et l'agent n'a aucun moyen
-de cadrer lui-même.
+`maxDepth` post-filtrait les lignes côté Node après que le navigateur eut
+construit et sérialisé l'arbre entier ; rien hors des tests ne l'utilisait. Il
+est remplacé par l'option native de Playwright, qui élague dans la page, et
+exposé au tool `screenshot`.
+
+Attention aux sémantiques : la profondeur native compte depuis la racine du
+locator, donc l'ancien `maxDepth: 1` vaut désormais `depth: 2`. Playwright lit
+`depth: 0` comme « illimité », l'inverse de ce qu'un appelant veut dire — la
+valeur est bornée à 1.
+
+Payload mesuré à travers le serveur MCP :
+
+| site | complet | `depth=3` |
+| --- | --- | --- |
+| news.ycombinator.com | 14 395 tok | 138 tok |
+| github.com/microsoft/playwright | 13 272 tok | 92 tok |
+
+Le guide et le skill demandent maintenant de cartographier une page inconnue en
+`depth=3` d'abord : un levier dont personne ne parle à l'agent ne sert à rien.
 
 ## Références
 
