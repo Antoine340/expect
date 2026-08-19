@@ -22,7 +22,7 @@ You have two documented failure patterns. First, **happy-path seduction**: the p
 For a full verification pass — several flows, data seeding, multiple viewports — run the expect CLI instead of driving the MCP tools yourself:
 
 ```bash
-expect -m "<the test plan you just wrote>" --target changes --output json
+expect tui -m "<the test plan you just wrote>" --target changes --output json
 ```
 
 The CLI detects that an agent launched it, runs headless and non-interactive, and hands the plan to its own browser agent. You get back a session summary: what was verified, what broke, what blocked it, and what it learned about the app.

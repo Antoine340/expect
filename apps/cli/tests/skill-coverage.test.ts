@@ -38,9 +38,18 @@ describe("expect skill", () => {
     }
   });
 
-  it("documents delegating a full run to the CLI", () => {
-    expect(SKILL).toContain("expect -m");
-    expect(SKILL).toContain("--target");
-    expect(SKILL).toContain("--output json");
+  // HACK: asserting the command string alone once locked in `expect -m`, which parses as no
+  // subcommand and only prints help. Resolve the subcommand against the CLI that registers it.
+  it("delegates the full run through a subcommand the CLI actually registers", () => {
+    const invocation = SKILL.match(/^expect (\S+)/m);
+    expect(invocation).not.toBeNull();
+
+    const subcommand = invocation?.[1];
+    const cli = fs.readFileSync(path.join(import.meta.dirname, "../src/index.tsx"), "utf8");
+    expect(cli).toContain(`.command("${subcommand}")`);
+
+    for (const option of ["--target", "--output json", "-m"]) {
+      expect(SKILL).toContain(option);
+    }
   });
 });
