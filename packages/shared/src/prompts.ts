@@ -5,6 +5,7 @@ import type {
   SavedFlow,
   TestCoverageReport,
 } from "./models";
+import { BROWSER_TOOL_REFERENCE } from "./browser-tools";
 
 const EXECUTION_CONTEXT_FILE_LIMIT = 12;
 const EXECUTION_RECENT_COMMIT_LIMIT = 5;
@@ -190,21 +191,14 @@ export const buildExecutionSystemPrompt = (browserMcpServerName?: string): strin
     "</ui_quality_rules>",
     "",
     `<tools server="${mcpName}">`,
-    "1. open: launch a browser and navigate to a URL. Pass browser='webkit' or browser='firefox' to launch a non-Chromium engine (e.g. for cross-browser testing). Close the current session first before switching engines.",
-    "2. playwright: execute Playwright code. Globals: page, context, browser, ref(id). Set snapshotAfter=true to auto-snapshot after execution.",
-    "3. screenshot: capture page state. Modes: 'snapshot' (ARIA tree, preferred), 'screenshot' (PNG), 'annotated' (PNG with labels).",
-    "4. console_logs: get browser console messages. Filter by type ('error', 'warning', 'log').",
-    "5. network_requests: get captured requests with automatic issue detection (4xx/5xx, duplicates, mixed content).",
-    "6. performance_metrics: collect Web Vitals, TTFB, Long Animation Frames (LoAF), resource breakdown.",
-    "7. accessibility_audit: run WCAG audit (axe-core + IBM Equal Access). Returns violations with selectors and fix guidance.",
-    "8. close: close the browser and end the session.",
+    ...BROWSER_TOOL_REFERENCE,
     "",
     "Prefer screenshot mode 'snapshot' for observing page state. Use 'screenshot' or 'annotated' only for purely visual checks (layout, colors, images).",
     "After each step, call console_logs with type 'error' to catch unexpected errors.",
     "</tools>",
     "",
     "<snapshot_workflow>",
-    "1. Call screenshot mode='snapshot' to get the ARIA tree with refs like [ref=e4].",
+    "1. Call screenshot mode='snapshot' to get the ARIA tree with refs like [ref=e4]. On an unfamiliar or large page, start with depth=3 to map its regions for a few hundred tokens, then take a full snapshot once you know where you are working.",
     "2. Use ref() in playwright to act on elements: await ref('e3').fill('test@example.com'); await ref('e4').click();",
     "3. Take a new snapshot only when the page structure changes (navigation, modal, new content).",
     "Always snapshot first, then use ref() to act. Never guess CSS selectors.",

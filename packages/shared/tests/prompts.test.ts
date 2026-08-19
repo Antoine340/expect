@@ -48,7 +48,7 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("playwright: execute Playwright");
     expect(prompt).toContain("screenshot: capture page state");
     expect(prompt).toContain("console_logs: get browser console");
-    expect(prompt).toContain("network_requests: get captured requests");
+    expect(prompt).toContain("network_requests: get captured HTTP requests");
     expect(prompt).toContain("close: close the browser");
   });
 
@@ -56,7 +56,7 @@ describe("buildExecutionPrompt", () => {
     const prompt = buildExecutionSystemPrompt();
     expect(prompt).toContain("browser='webkit'");
     expect(prompt).toContain("browser='firefox'");
-    expect(prompt).toContain("Close the current session first before switching engines");
+    expect(prompt).toContain("close the current session first before switching engines");
   });
 
   it("includes step marker protocol in system prompt", () => {

@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod/v4";
 import { Duration, Effect, Option, type ManagedRuntime } from "effect";
 import { FileSystem } from "effect/FileSystem";
+import { BROWSER_TOOL_REFERENCE } from "@expect/shared/browser-tools";
 import { evaluateRuntime } from "../utils/evaluate-runtime";
 import { runAccessibilityAudit } from "../accessibility";
 import { formatPerformanceTrace } from "../performance-trace";
@@ -132,20 +133,13 @@ const buildExpectGuide = (): string =>
     "",
     "Workflow:",
     "1. `open` → interact with `playwright` and `screenshot` → observe with `console_logs` and `network_requests` → audit with `accessibility_audit` and `performance_metrics` → `close`.",
-    "2. One browser session at a time. For cross-browser testing (WebKit, Firefox), close first, then open with a different engine.",
+    "2. One browser session at a time.",
     "</execution_strategy>",
     "",
     "<expect_mcp_tools>",
     "Use these tools for browser interactions. They are provided by the expect MCP server.",
     "",
-    "1. open: launch a browser and navigate to a URL. Pass headed=true to show the browser window. Pass cookies=true to reuse local browser cookies. Pass browser='webkit' or browser='firefox' for cross-browser testing. Pass cdp='ws://...' to connect to an existing Chrome instance. Pass locale='fr-FR' or deviceScaleFactor=2 to match the users you are testing for — both are fixed for the life of the browser, so decide before opening.",
-    "2. playwright: execute Playwright code in Node.js context. Globals: page (Page), context (BrowserContext), browser (Browser), ref (function: snapshot ref ID → Locator). Use `return` to collect data from the page — the response is JSON: { result: <your value>, resultFile: '<path>' }. The result is also written to a tmp file you can read or grep later. Batch multiple actions AND data collection into a single playwright call. Set snapshotAfter=true to auto-snapshot after DOM-changing actions (response adds snapshot alongside result).",
-    "3. screenshot: capture page state. Modes: 'snapshot' (ARIA accessibility tree with element refs — preferred for interaction), 'screenshot' (PNG image), 'annotated' (PNG with numbered labels on interactive elements). Pass fullPage=true for full scrollable content. Pass depth=N on a snapshot to keep only the top N levels.",
-    "4. console_logs: get browser console messages, including uncaught exceptions and unhandled promise rejections (type 'error', with their stack). Filter by type ('error', 'warning', 'log'). Pass clear=true to reset after reading.",
-    "5. network_requests: get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Each entry carries the body it sent, with secret-looking keys redacted. Filter by method, URL, or resource type.",
-    "6. performance_metrics: collect Core Web Vitals (FCP, LCP, CLS, INP), navigation timing (TTFB), Long Animation Frames (LoAF) with script attribution, and resource breakdown.",
-    "7. accessibility_audit: run a WCAG accessibility audit using axe-core + IBM Equal Access. Returns violations sorted by severity with CSS selectors, HTML context, and fix guidance.",
-    "8. close: close the browser and end the session. Always call this when done — it flushes the session video and screenshots to disk.",
+    ...BROWSER_TOOL_REFERENCE,
     "</expect_mcp_tools>",
     "",
     "<snapshot_workflow>",
