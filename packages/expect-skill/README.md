@@ -17,11 +17,31 @@ Always use the expect MCP tools instead of raw browser tools (Playwright MCP, ch
 
 You have two documented failure patterns. First, **happy-path seduction**: the page loads, the primary flow works, and you stop — the easy 80% passes and the bugs hide in the untested 20%. Second, **soft failures**: a check fails but the page "mostly works," so you report it as passing, hiding the bug from the developer.
 
+## Delegate a Full Run to the Expect CLI
+
+For a full verification pass — several flows, data seeding, multiple viewports — run the expect CLI instead of driving the MCP tools yourself:
+
+```bash
+expect -m "<the test plan you just wrote>" --target changes --output json
+```
+
+The CLI detects that an agent launched it, runs headless and non-interactive, and hands the plan to its own browser agent. You get back a session summary: what was verified, what broke, what blocked it, and what it learned about the app.
+
+**Why this and not the MCP tools directly:** every snapshot is thousands of tokens, and a full run produces dozens of them plus screenshots and network dumps. Run through the CLI, that payload stays in the CLI's own session and never enters yours — you keep your context for the code. You write the plan, it executes and reports.
+
+- `--target` — `changes` (default), `unstaged`, or `branch`
+- `-u <url>` — base URL of the dev server
+- `--browser-mode headed` — show the window
+- `--output json` — structured result instead of prose
+
+**Use the MCP tools directly instead** for a short, targeted check where you want the raw evidence rather than a summary: does this button fire the right request, does this element render at 375px.
+
 ## Delegate Verification to a Subagent
 
-Browser verification is a separate concern from writing code. When you have a subagent or background task capability (e.g. `Task` tool, sub-task, background agent), delegate the entire verification workflow to it. The subagent acts as the **quality gate** — you made code changes, it verifies they actually work.
+When the CLI is not installed, delegate the verification workflow to a subagent or background task (e.g. `Task` tool, sub-task, background agent). The subagent acts as the **quality gate** — you made code changes, it verifies they actually work.
 
 **How to delegate:** Launch a subagent with a prompt that includes:
+
 - The URL to test against and how to start the dev server if needed
 - What changed (files, components, routes) and what behavior to verify
 - The primary flow to test first, then adjacent flows to cover
@@ -31,6 +51,7 @@ Browser verification is a separate concern from writing code. When you have a su
 The subagent handles the full lifecycle (`open` → interact → audit → `close`) and returns a pass/fail summary with evidence. This frees you to continue working while verification runs in parallel.
 
 **When to delegate:**
+
 - After finishing a code change that touches UI, forms, routes, styles, or layouts
 - When the user asks to test, QA, validate, or verify something
 - During fix → re-verify loops (delegate each re-verification pass)
@@ -62,23 +83,29 @@ Or add it to your MCP config (`.mcp.json`, `.cursor/mcp.json`, etc.):
 
 These are the ONLY tools you should use for browser interactions. Do NOT use any other browser automation tools.
 
-1. **open** — Launch a browser and navigate to a URL. Pass `cookies=true` to reuse local browser cookies. Pass `browser='webkit'` or `browser='firefox'` for cross-browser testing. Pass `cdp='ws://...'` to connect to an existing Chrome instance. Pass `locale='fr-FR'` or `deviceScaleFactor=2` to match the users you are testing for — both are fixed for the life of the browser, so decide before opening.
+1. **open** — Launch a browser and navigate to a URL. Pass `cookies=true` to reuse local browser cookies. Pass `browser='webkit'` or `browser='firefox'` for cross-browser testing — one session at a time, so close the current session first before switching engines. Pass `cdp='ws://...'` to connect to an existing Chrome instance. Pass `locale='fr-FR'` or `deviceScaleFactor=2` to match the users you are testing for — both are fixed for the life of the browser, so decide before opening.
 2. **playwright** — Execute Playwright code in Node.js context. Globals: `page`, `context`, `browser`, `ref` (snapshot ref ID → Locator). Use `return` to collect data — response is JSON: `{ result: <value>, resultFile: '<path>' }`. The result file persists until `close` so you can read or grep it later. Batch multiple actions AND data collection into a single `playwright` call. Set `snapshotAfter=true` to auto-snapshot after DOM-changing actions (response adds `snapshot` alongside result).
-3. **screenshot** — Capture page state. Modes: `snapshot` (ARIA accessibility tree with element refs — preferred), `screenshot` (PNG image), `annotated` (PNG with numbered labels on interactive elements). Pass `fullPage=true` for full scrollable content. Pass `depth=N` on a snapshot to keep only the top N levels.
+3. **screenshot** — Capture page state. Modes: `snapshot` (ARIA accessibility tree with element refs — preferred), `screenshot` (PNG image), `annotated` (PNG with numbered labels on interactive elements). Pass `fullPage=true` for full scrollable content. Pass `depth=N` on a snapshot to keep only the top N levels: on an unfamiliar or large page, `depth=3` maps its regions for a few hundred tokens instead of the ten thousand a full tree costs.
 4. **console_logs** — Get browser console messages, including uncaught exceptions and unhandled promise rejections (reported as type `error` with their stack). Filter by type (`error`, `warning`, `log`). Pass `clear=true` to reset after reading.
 5. **network_requests** — Get captured HTTP requests with automatic issue detection (4xx/5xx failures, transport failures such as CORS, DNS or connection errors reported with the browser's reason, duplicate requests, mixed content). Each entry carries the body it sent, with secret-looking keys redacted. Filter by method, URL, or resource type.
 
-   It never reports what a request *received*. To check a response body, install the listener in the same `playwright` call, **before** the action that triggers it:
+   It never reports what a request _received_. To check a response body, install the listener in the same `playwright` call, **before** the action that triggers it:
 
    ```js
    const bodies = [];
-   page.on('response', async (r) => {
-     if (r.url().includes('/api/')) bodies.push({ url: r.url(), status: r.status(), body: await r.text().catch(() => undefined) });
+   page.on("response", async (r) => {
+     if (r.url().includes("/api/"))
+       bodies.push({
+         url: r.url(),
+         status: r.status(),
+         body: await r.text().catch(() => undefined),
+       });
    });
-   await ref('e5').click();
+   await ref("e5").click();
    await page.waitForTimeout(500);
    return bodies;
    ```
+
 6. **performance_metrics** — Collect Core Web Vitals (FCP, LCP, CLS, INP), navigation timing (TTFB), Long Animation Frames (LoAF) with script attribution, and resource breakdown.
 7. **accessibility_audit** — Run a WCAG accessibility audit using axe-core + IBM Equal Access. Returns violations sorted by severity with CSS selectors, HTML context, and fix guidance.
 8. **close** — Close the browser and end the session. Always call this when done — it flushes the session video and screenshots to disk.
@@ -95,6 +122,7 @@ Scan the changed files and diff to identify what behavior changed and which user
 - If multiple files implement one feature, test the full user journey end-to-end instead of isolated clicks.
 
 **Scope strategy:**
+
 - For small/focused changes: test the primary flow first, then 2-3 adjacent flows that exercise the same code paths.
 - For broad changes touching shared code: test 3-5 flows, prioritizing paths that share components or data with the changed files. If shared layouts or utilities changed, verify multiple pages.
 - For branch-level reviews: aim for 5-8 total flows. Each changed route, component, or data path should get its own verification. Prioritize security and authorization edge cases. Do not stop after the happy path passes.
@@ -129,6 +157,7 @@ Every page you test MUST have real data. If a page shows an empty state, zero re
 5. After seeding, return to the target page and verify all records appear.
 
 **Adversarial seed values** — rotate across your 3+ records:
+
 - Unicode stress: umlauts + hyphen ("Günther Müller-Lüdenscheid"), Arabic RTL, CJK, Zalgo combining chars
 - Boundary values: 0, -1, 999999999.99, empty string, 5000+ chars, `<script>alert(1)</script>`
 - Edge dates: epoch (1970-01-01), current month, obviously invalid date if free input
