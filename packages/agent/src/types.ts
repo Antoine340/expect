@@ -10,6 +10,9 @@ const ModelPreference = Schema.Struct({
   value: Schema.String,
 });
 
+export const AgentEffort = Schema.Literals(["low", "medium", "high", "xhigh", "max"]);
+export type AgentEffort = typeof AgentEffort.Type;
+
 export class AgentStreamOptions extends Schema.Class<AgentStreamOptions>("AgentStreamOptions")({
   cwd: Schema.String,
   sessionId: Schema.Option(Schema.String),
@@ -17,4 +20,5 @@ export class AgentStreamOptions extends Schema.Class<AgentStreamOptions>("AgentS
   systemPrompt: Schema.Option(Schema.String),
   mcpEnv: Schema.optional(Schema.Array(McpEnvEntry)),
   modelPreference: Schema.optional(ModelPreference),
+  effort: Schema.optional(AgentEffort),
 }) {}

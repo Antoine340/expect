@@ -47,6 +47,34 @@ describe("buildSessionMeta", () => {
     });
   });
 
+  it("sets the requested Claude effort outside GitHub Actions", () => {
+    const sessionMeta = buildSessionMeta({
+      provider: "claude",
+      effort: "xhigh",
+      metadata: { isGitHubActions: false },
+    });
+
+    expect(sessionMeta).toEqual({ claudeCode: { options: { effort: "xhigh" } } });
+  });
+
+  it("lets the requested effort override the GitHub Actions default", () => {
+    const sessionMeta = buildSessionMeta({
+      provider: "claude",
+      effort: "xhigh",
+      metadata: { isGitHubActions: true },
+    });
+
+    expect(sessionMeta).toEqual({
+      claudeCode: { options: { effort: "xhigh", thinking: { type: "adaptive" } } },
+    });
+  });
+
+  it("ignores effort for non-claude providers", () => {
+    const sessionMeta = buildSessionMeta({ provider: "codex", effort: "xhigh" });
+
+    expect(sessionMeta).toBeUndefined();
+  });
+
   it("combines the system prompt with GitHub Actions settings", () => {
     const sessionMeta = buildSessionMeta({
       provider: "claude",

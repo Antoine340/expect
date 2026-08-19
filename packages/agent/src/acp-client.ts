@@ -31,6 +31,7 @@ import {
 import { hasStringMessage } from "@expect/shared/utils";
 import { detectLaunchedFrom } from "@expect/shared/launched-from";
 import { buildSessionMeta } from "./build-session-meta";
+import type { AgentEffort } from "./types";
 
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -706,12 +707,14 @@ export class AcpClient extends ServiceMap.Service<AcpClient>()("@expect/AcpClien
       cwd: string,
       mcpEnv: ReadonlyArray<{ name: string; value: string }> = [],
       systemPrompt: Option.Option<string> = Option.none(),
+      effort?: AgentEffort,
     ) {
-      yield* Effect.annotateCurrentSpan({ cwd, launchedFrom });
+      yield* Effect.annotateCurrentSpan({ cwd, launchedFrom, effort });
       const mcpServers = buildMcpServers(mcpEnv);
       const sessionMeta = buildSessionMeta({
         provider: adapter.provider,
         systemPrompt: Option.getOrUndefined(systemPrompt),
+        effort,
         metadata: { isGitHubActions },
       });
       return yield* Effect.tryPromise({
@@ -806,6 +809,7 @@ export class AcpClient extends ServiceMap.Service<AcpClient>()("@expect/AcpClien
       mcpEnv = [],
       systemPrompt = Option.none(),
       modelPreference,
+      effort,
     }: {
       sessionId: Option.Option<SessionId>;
       prompt: string;
@@ -813,10 +817,11 @@ export class AcpClient extends ServiceMap.Service<AcpClient>()("@expect/AcpClien
       mcpEnv?: ReadonlyArray<{ name: string; value: string }>;
       systemPrompt?: Option.Option<string>;
       modelPreference?: { configId: string; value: string };
+      effort?: AgentEffort;
     }) {
       const sessionId = Option.isSome(sessionIdOption)
         ? sessionIdOption.value
-        : yield* createSession(cwd, mcpEnv, systemPrompt);
+        : yield* createSession(cwd, mcpEnv, systemPrompt, effort);
 
       yield* Effect.logDebug("ACP stream starting", { sessionId });
 

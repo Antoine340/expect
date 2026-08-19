@@ -80,6 +80,12 @@ const resolveTerminalTimestamp = (executed: ExecutedTestPlan, previous: number |
   return previous ?? Date.now();
 };
 
+// HACK: a branch review is the one scope the prompt asks to be exhaustive on — 5-8 flows across
+// every changed route — and xhigh is what Anthropic documents for the hardest agentic work. The
+// narrower scopes are left unset so they inherit the provider default rather than pin it here.
+export const resolveEffort = (changesFor: ChangesFor) =>
+  changesFor._tag === "Branch" ? ("xhigh" as const) : undefined;
+
 export class Executor extends ServiceMap.Service<Executor>()("@supervisor/Executor", {
   make: Effect.gen(function* () {
     const agent = yield* Agent;
@@ -196,10 +202,13 @@ export class Executor extends ServiceMap.Service<Executor>()("@supervisor/Execut
         });
       }
 
+      const effort = resolveEffort(options.changesFor);
+
       yield* Effect.logInfo("Agent stream starting", {
         planId,
         promptLength: prompt.length,
         mcpEnvCount: mcpEnv.length,
+        effort,
       });
 
       const streamOptions = new AgentStreamOptions({
@@ -209,6 +218,7 @@ export class Executor extends ServiceMap.Service<Executor>()("@supervisor/Execut
         systemPrompt: Option.some(systemPrompt),
         mcpEnv,
         modelPreference: options.modelPreference,
+        ...(effort && { effort }),
       });
 
       return agent.stream(streamOptions).pipe(

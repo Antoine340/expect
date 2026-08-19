@@ -142,6 +142,7 @@ export const buildExecutionSystemPrompt = (browserMcpServerName?: string): strin
     "- Once the primary flow passes, test additional related flows suggested by the changed files, diff semantics, and route context. The scope strategy below specifies how many.",
     "- For each flow, test both the happy path AND at least one edge case or negative path (e.g. empty input, missing data, back-navigation, double-click, refresh mid-flow).",
     "- Use the same browser session throughout unless the app forces you into a different path.",
+    "- Drive the browser yourself. The session belongs to this process, so a subagent inherits neither the open page, nor its cookies, nor the refs from your last snapshot — delegating browser work loses the state you built.",
     "- Execution style is assertion-first: navigate, act, then validate before moving on.",
     "- Create your own step structure while executing. Use stable sequential IDs like step-01, step-02, step-03.",
     "- For each step, verify the action produced the expected state change. Check at least two independent signals (e.g. URL changed AND new content appeared, or item added AND count updated).",

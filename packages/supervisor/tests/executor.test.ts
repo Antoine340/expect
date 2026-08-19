@@ -9,6 +9,7 @@ import {
   ChangesFor,
   AcpSessionUpdate,
 } from "@expect/shared/models";
+import { resolveEffort } from "../src/executor";
 
 const makeTestPlan = (): TestPlan =>
   new TestPlan({
@@ -104,5 +105,20 @@ describe("reducer", () => {
     }
 
     expect(previous.events.length).toBeGreaterThan(0);
+  });
+});
+
+describe("resolveEffort", () => {
+  it("raises effort for a branch review and leaves narrower scopes on the provider default", () => {
+    expect(resolveEffort(ChangesFor.makeUnsafe({ _tag: "Branch", mainBranch: "main" }))).toBe(
+      "xhigh",
+    );
+    expect(resolveEffort(ChangesFor.makeUnsafe({ _tag: "WorkingTree" }))).toBeUndefined();
+    expect(
+      resolveEffort(ChangesFor.makeUnsafe({ _tag: "Changes", mainBranch: "main" })),
+    ).toBeUndefined();
+    expect(
+      resolveEffort(ChangesFor.makeUnsafe({ _tag: "Commit", hash: "abc1234" })),
+    ).toBeUndefined();
   });
 });
