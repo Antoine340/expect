@@ -72,7 +72,7 @@ describe("buildExecutionPrompt", () => {
     const prompt = buildExecutionSystemPrompt();
     expect(prompt).toContain("handoff to the outer agent");
     expect(prompt).toContain("what was verified");
-    expect(prompt).toContain("bugs found");
+    expect(prompt).toContain("every bug found");
     expect(prompt).toContain("anything learned");
   });
 
@@ -232,7 +232,21 @@ describe("buildExecutionPrompt", () => {
     expect(prompt).toContain("Günther Müller-Lüdenscheid");
     expect(prompt).toContain("[Setup]");
     expect(prompt).toContain("<script>alert(1)</script>");
-    expect(prompt).toContain("empty state renders correctly");
+    expect(prompt).toContain("An empty-state screenshot is not a test");
+  });
+
+  it("keeps the rules that outlived the rationalization lists", () => {
+    const prompt = buildExecutionSystemPrompt();
+    expect(prompt).toContain("you cover what they did not");
+    expect(prompt).toContain("Always attempt the creation flow before concluding you lack");
+    expect(prompt).toContain("stop narrating and run the tool call");
+    expect(prompt).toContain("every route the diff changed");
+  });
+
+  it("tells the agent the session summary is its only channel to the outer agent", () => {
+    const prompt = buildExecutionSystemPrompt();
+    expect(prompt).toContain("sees this line and nothing else of your run");
+    expect(prompt).toContain("carrying its step id");
   });
 
   it("includes assertion depth guidance in execution strategy", () => {
