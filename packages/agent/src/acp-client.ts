@@ -25,12 +25,14 @@ import {
 import {
   AcpConfigOption,
   AcpConfigOptionUpdate,
+  AcpPromptResponse,
   AcpSessionUpdate,
   AgentProvider,
 } from "@expect/shared/models";
 import { hasStringMessage } from "@expect/shared/utils";
 import { detectLaunchedFrom } from "@expect/shared/launched-from";
 import { buildSessionMeta } from "./build-session-meta";
+import { EMPTY_RUN_METRICS, recordUpdate } from "./run-metrics";
 import type { AgentEffort } from "./types";
 
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
@@ -844,6 +846,8 @@ export class AcpClient extends ServiceMap.Service<AcpClient>()("@expect/AcpClien
 
       const updatesQueue = yield* getQueueBySessionId(sessionId);
       const lastActivityAt = yield* Ref.make(Date.now());
+      const runMetrics = yield* Ref.make(EMPTY_RUN_METRICS);
+      const startedAt = Date.now();
 
       const effectivePrompt =
         adapter.provider !== "claude" && Option.isSome(systemPrompt)
@@ -859,6 +863,21 @@ export class AcpClient extends ServiceMap.Service<AcpClient>()("@expect/AcpClien
         catch: (cause) => new AcpStreamError({ cause }),
       }).pipe(
         Effect.tap(() => Effect.logDebug("ACP prompt completed")),
+        Effect.tap((response) =>
+          Schema.decodeUnknownEffect(AcpPromptResponse)(response).pipe(
+            Effect.flatMap((decoded) =>
+              Ref.update(runMetrics, (metrics) => ({
+                ...metrics,
+                usage: decoded.usage ?? undefined,
+              })),
+            ),
+            Effect.catchTag("SchemaError", (error) =>
+              Effect.logDebug("ACP prompt response carried no readable usage", {
+                error: error.message,
+              }),
+            ),
+          ),
+        ),
         Effect.tap(() => Queue.end(updatesQueue)),
         FiberMap.run(streamFiberMap, sessionId, { startImmediately: true }),
       );
@@ -895,6 +914,23 @@ export class AcpClient extends ServiceMap.Service<AcpClient>()("@expect/AcpClien
       return Stream.fromQueue(updatesQueue).pipe(
         Stream.tap((update) =>
           isMeaningfulActivity(update) ? Ref.set(lastActivityAt, Date.now()) : Effect.void,
+        ),
+        Stream.tap((update) => Ref.update(runMetrics, (metrics) => recordUpdate(metrics, update))),
+        Stream.ensuring(
+          Effect.gen(function* () {
+            const metrics = yield* Ref.get(runMetrics);
+            yield* Effect.logInfo("Run measured", {
+              sessionId,
+              durationMs: Date.now() - startedAt,
+              toolCalls: metrics.toolCalls,
+              failedToolCalls: metrics.failedToolCalls,
+              callsByTitle: metrics.callsByTitle,
+              inputTokens: metrics.usage?.inputTokens,
+              outputTokens: metrics.usage?.outputTokens,
+              cachedReadTokens: metrics.usage?.cachedReadTokens ?? undefined,
+              thoughtTokens: metrics.usage?.thoughtTokens ?? undefined,
+            });
+          }),
         ),
       );
     }, Stream.unwrap);

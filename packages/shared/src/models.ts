@@ -226,6 +226,7 @@ export const AcpUsage = Schema.Struct({
   cachedWriteTokens: Schema.optional(Schema.NullOr(Schema.Number)),
   thoughtTokens: Schema.optional(Schema.NullOr(Schema.Number)),
 });
+export type AcpUsage = typeof AcpUsage.Type;
 
 export class AcpPromptResponse extends Schema.Class<AcpPromptResponse>("AcpPromptResponse")({
   stopReason: AcpStopReason,
