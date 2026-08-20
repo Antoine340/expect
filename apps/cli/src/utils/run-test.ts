@@ -240,6 +240,7 @@ export const runHeadless = (options: HeadlessRunOptions) =>
               report.steps.length,
               totalDurationMs,
             );
+            ciReporter.sessionSummary(report.summary);
             ciReporter.artifacts(artifacts.videoPath, artifacts.screenshotPaths);
             for (const screenshotPath of artifacts.screenshotPaths) {
               process.stdout.write(`Screenshot: ${screenshotPath}\n`);
@@ -340,10 +341,6 @@ export const runHeadless = (options: HeadlessRunOptions) =>
               });
             });
 
-            const summaryParts = [`${passedCount} passed`, `${failedCount} failed`];
-            if (skippedCount > 0) summaryParts.push(`${skippedCount} skipped`);
-            const summaryText = `${summaryParts.join(", ")} out of ${report.steps.length} step${report.steps.length === 1 ? "" : "s"}`;
-
             const resultOutput = new CiResultOutput({
               version: VERSION,
               status: report.status,
@@ -356,7 +353,7 @@ export const runHeadless = (options: HeadlessRunOptions) =>
                   ? { screenshots: [...artifacts.screenshotPaths] }
                   : {}),
               },
-              summary: summaryText,
+              summary: report.summary,
             });
 
             const jsonString = JSON.stringify(

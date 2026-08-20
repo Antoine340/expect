@@ -71,6 +71,12 @@ const loadAceScript = () => {
   return cachedAceScript;
 };
 
+export const describeEmptyAudit = (failedEngines: readonly string[]) => {
+  if (failedEngines.length === 0) return "No accessibility violations found.";
+  const subject = failedEngines.length === 1 ? "that engine" : "those engines";
+  return `No violations reported, but ${failedEngines.join(" and ")} failed to run — this page is unaudited by ${subject}, not proven clean.`;
+};
+
 export const runAccessibilityAudit = Effect.fn("Accessibility.runAccessibilityAudit")(function* (
   page: Page,
   options: AccessibilityAuditOptions = {},
@@ -174,14 +180,21 @@ export const runAccessibilityAudit = Effect.fn("Accessibility.runAccessibilityAu
     (left, right) => (IMPACT_ORDER[left.impact] ?? 3) - (IMPACT_ORDER[right.impact] ?? 3),
   );
 
+  const failedEngines = [
+    ...(axeResults ? [] : ["axe-core"]),
+    ...(ibmReport ? [] : ["ibm-equal-access"]),
+  ];
+
   yield* Effect.logInfo("Accessibility audit complete", {
     axeViolationCount: axeViolations.length,
     ibmViolationCount: ibmViolations.length,
     totalViolationCount: violations.length,
+    failedEngines,
   });
 
   return {
     violations,
+    failedEngines,
     summary: {
       total: violations.length,
       critical: violations.filter((violation) => violation.impact === "critical").length,

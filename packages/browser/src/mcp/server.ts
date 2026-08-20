@@ -7,7 +7,7 @@ import { Duration, Effect, Option, type ManagedRuntime } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { BROWSER_TOOL_REFERENCE } from "@expect/shared/browser-tools";
 import { evaluateRuntime } from "../utils/evaluate-runtime";
-import { runAccessibilityAudit } from "../accessibility";
+import { describeEmptyAudit, runAccessibilityAudit } from "../accessibility";
 import { formatPerformanceTrace } from "../performance-trace";
 import { McpSession } from "./mcp-session";
 import { OverlayController } from "./overlay-controller";
@@ -694,7 +694,7 @@ export const createBrowserMcpServer = <E>(
           yield* overlay.updateLabel(page, "Running accessibility audit");
           const result = yield* runAccessibilityAudit(page, { selector, tags });
           if (result.violations.length === 0) {
-            return textResult("No accessibility violations found.");
+            return textResult(describeEmptyAudit(result.failedEngines));
           }
           return jsonResult(result);
         }).pipe(Effect.withSpan(`mcp.tool.accessibility_audit`)),

@@ -19,7 +19,7 @@ export const layerCli = ({ verbose, agent }: { verbose: boolean; agent: AgentBac
     Analytics.layerLocal,
     watchLayer,
   ).pipe(
-    Layer.provide(DebugFileLoggerLayer),
+    Layer.provideMerge(DebugFileLoggerLayer),
     Layer.provideMerge(Layer.succeed(References.MinimumLogLevel, verbose ? "All" : "Info")),
   );
 };

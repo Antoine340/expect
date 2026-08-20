@@ -247,6 +247,34 @@ describe("createCiReporter", () => {
     });
   });
 
+  describe("sessionSummary", () => {
+    it("prints the agent handoff the counts cannot carry", () => {
+      const reporter = createCiReporter({
+        version: "1.0.0",
+        agent: "claude",
+        timeoutMs: undefined,
+        isGitHubActions: false,
+      });
+      reporter.sessionSummary(
+        "DPO line overflows at 375px on /privacy; auth needs a seeded session.",
+      );
+      const output = stderrText();
+      expect(output).toContain("Summary");
+      expect(output).toContain("overflows at 375px on /privacy");
+    });
+
+    it("stays silent when the run produced no summary", () => {
+      const reporter = createCiReporter({
+        version: "1.0.0",
+        agent: "claude",
+        timeoutMs: undefined,
+        isGitHubActions: false,
+      });
+      reporter.sessionSummary("");
+      expect(stderrText()).toBe("");
+    });
+  });
+
   describe("artifacts", () => {
     it("shows video path", () => {
       const reporter = createCiReporter({

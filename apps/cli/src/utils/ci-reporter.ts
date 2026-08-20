@@ -94,6 +94,13 @@ export const createCiReporter = (options: CiReporterOptions) => {
     writeStderr(` ${pc.bold("Time")}   ${formatElapsedTime(durationMs)}`);
   };
 
+  const sessionSummary = (text: string) => {
+    if (!text) return;
+    writeStderr("");
+    writeStderr(` ${pc.bold("Summary")}`);
+    writeStderr(`   ${text}`);
+  };
+
   const artifacts = (videoPath?: string, screenshotPaths?: readonly string[]) => {
     if (!videoPath && (!screenshotPaths || screenshotPaths.length === 0)) return;
     writeStderr("");
@@ -128,6 +135,7 @@ export const createCiReporter = (options: CiReporterOptions) => {
     stepSkipped,
     heartbeat,
     summary,
+    sessionSummary,
     artifacts,
     timeoutError,
   } as const;
