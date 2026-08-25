@@ -176,7 +176,13 @@ describe("extractCloseArtifacts", () => {
             sessionUpdate: "tool_call_update",
             toolCallId: "call-1",
             status: "completed",
-            rawOutput: "Browser closed.\nPlaywright video: /tmp/v.webm\nScreenshot: /tmp/s0.png",
+            // HACK: the adapter sends `rawOutput: chunk.content` — MCP content blocks, not text.
+            rawOutput: [
+              {
+                type: "text",
+                text: "Browser closed.\nPlaywright video: /tmp/v.webm\nScreenshot: /tmp/s0.png",
+              },
+            ],
           }),
         );
 

@@ -616,6 +616,13 @@ export class RunFinished extends Schema.TaggedClass<RunFinished>()("RunFinished"
   }
 }
 
+const ToolOutputTextBlock = Schema.Struct({
+  type: Schema.Literal("text"),
+  text: Schema.String,
+});
+
+const decodeToolOutputTextBlock = Schema.decodeUnknownOption(ToolOutputTextBlock);
+
 const serializeToolResult = (value: unknown): string => {
   if (
     typeof value === "string" ||
@@ -626,6 +633,17 @@ const serializeToolResult = (value: unknown): string => {
   ) {
     return String(value);
   }
+
+  // HACK: ACP sends a tool's rawOutput as MCP content blocks. JSON.stringify buries the text —
+  // and its newlines — inside a JSON string, leaving line-oriented parsers a single line.
+  if (Array.isArray(value)) {
+    const texts = value
+      .map((block) => decodeToolOutputTextBlock(block))
+      .filter(Option.isSome)
+      .map((block) => block.value.text);
+    if (texts.length > 0) return texts.join("\n");
+  }
+
   try {
     return JSON.stringify(value);
   } catch {
