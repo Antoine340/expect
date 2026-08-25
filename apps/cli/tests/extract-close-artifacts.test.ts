@@ -1,17 +1,36 @@
 import { describe, expect, it } from "vite-plus/test";
 import { pathToFileURL } from "node:url";
-import { ToolResult } from "@expect/shared/models";
+import { Option } from "effect";
+import {
+  AcpToolCall,
+  AcpToolCallUpdate,
+  ChangesFor,
+  ExecutedTestPlan,
+  PlanId,
+  RunStarted,
+  TestPlan,
+  ToolResult,
+} from "@expect/shared/models";
 import { extractCloseArtifacts } from "../src/utils/extract-close-artifacts";
 import type { ExecutionEvent } from "@expect/shared/models";
 
+// HACK: the ACP adapter names browser tools `mcp__browser__<tool>`, never the bare name — a
+// fixture built with "close" passes against a parser the real pipeline never feeds.
+const CLOSE_TOOL_NAME = "mcp__browser__close";
+
 const makeCloseResult = (result: string): ExecutionEvent =>
-  new ToolResult({ toolName: "close", result, isError: false });
+  new ToolResult({ toolCallId: "call-close", toolName: CLOSE_TOOL_NAME, result, isError: false });
 
 const makeErrorCloseResult = (result: string): ExecutionEvent =>
-  new ToolResult({ toolName: "close", result, isError: true });
+  new ToolResult({ toolCallId: "call-close", toolName: CLOSE_TOOL_NAME, result, isError: true });
 
 const makeOtherToolResult = (result: string): ExecutionEvent =>
-  new ToolResult({ toolName: "snapshot", result, isError: false });
+  new ToolResult({
+    toolCallId: "call-snapshot",
+    toolName: "mcp__browser__screenshot",
+    result,
+    isError: false,
+  });
 
 describe("extractCloseArtifacts", () => {
   describe("when no close event exists", () => {
@@ -45,7 +64,12 @@ describe("extractCloseArtifacts", () => {
 
     it("returns all undefined when close result is empty", () => {
       const events: ExecutionEvent[] = [
-        new ToolResult({ toolName: "close", result: "", isError: false }),
+        new ToolResult({
+          toolCallId: "call-close",
+          toolName: CLOSE_TOOL_NAME,
+          result: "",
+          isError: false,
+        }),
       ];
 
       const artifacts = extractCloseArtifacts(events);
@@ -117,6 +141,49 @@ describe("extractCloseArtifacts", () => {
       expect(artifacts.videoPath).toBe("/tmp/video.webm");
       expect(artifacts.videoUrl).toBe(pathToFileURL("/tmp/video.webm").href);
       expect(artifacts.screenshotPaths).toEqual([]);
+    });
+  });
+
+  describe("fed by the real ACP pipeline", () => {
+    it("survives a tool_call_update that carries no title", () => {
+      const plan = new TestPlan({
+        id: PlanId.makeUnsafe("plan-01"),
+        title: "artifacts",
+        rationale: "artifacts",
+        steps: [],
+        changesFor: ChangesFor.makeUnsafe({ _tag: "WorkingTree" }),
+        currentBranch: "main",
+        diffPreview: "",
+        fileStats: [],
+        instruction: "artifacts",
+        baseUrl: Option.none(),
+        isHeadless: true,
+        cookieBrowserKeys: [],
+        testCoverage: Option.none(),
+      });
+
+      const executed = new ExecutedTestPlan({ ...plan, events: [new RunStarted({ plan })] })
+        .addEvent(
+          new AcpToolCall({
+            sessionUpdate: "tool_call",
+            toolCallId: "call-1",
+            title: CLOSE_TOOL_NAME,
+            rawInput: {},
+          }),
+        )
+        .addEvent(
+          new AcpToolCallUpdate({
+            sessionUpdate: "tool_call_update",
+            toolCallId: "call-1",
+            status: "completed",
+            rawOutput: "Browser closed.\nPlaywright video: /tmp/v.webm\nScreenshot: /tmp/s0.png",
+          }),
+        );
+
+      const artifacts = extractCloseArtifacts(executed.events);
+
+      expect(artifacts.videoPath).toBe("/tmp/v.webm");
+      expect(artifacts.screenshotPaths).toEqual(["/tmp/s0.png"]);
     });
   });
 

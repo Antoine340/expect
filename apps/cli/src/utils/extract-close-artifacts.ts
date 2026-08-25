@@ -1,8 +1,8 @@
 import type { ExecutionEvent } from "@expect/shared/models";
+import { artifactLines, findCloseOutput, screenshotPathsFrom } from "@expect/shared/tool-events";
 import { pathToFileURL } from "node:url";
 
 const PLAYWRIGHT_VIDEO_PREFIX = "Playwright video:";
-const SCREENSHOT_PREFIX = "Screenshot:";
 
 export interface CloseArtifacts {
   readonly videoUrl: string | undefined;
@@ -11,14 +11,8 @@ export interface CloseArtifacts {
 }
 
 export const extractCloseArtifacts = (events: readonly ExecutionEvent[]): CloseArtifacts => {
-  const closeResult = events.findLast(
-    (event) =>
-      event._tag === "ToolResult" &&
-      event.toolName === "close" &&
-      !event.isError &&
-      event.result.length > 0,
-  );
-  if (!closeResult || closeResult._tag !== "ToolResult") {
+  const closeOutput = findCloseOutput(events);
+  if (!closeOutput) {
     return {
       videoUrl: undefined,
       videoPath: undefined,
@@ -26,27 +20,16 @@ export const extractCloseArtifacts = (events: readonly ExecutionEvent[]): CloseA
     };
   }
 
-  const lines = closeResult.result
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  const extractValue = (prefix: string) => {
-    const raw = lines
-      .find((line) => line.startsWith(prefix))
-      ?.replace(prefix, "")
-      .trim();
-    return raw && raw.length > 0 ? raw : undefined;
-  };
-
-  const videoPath = extractValue(PLAYWRIGHT_VIDEO_PREFIX);
-  const screenshotPaths = lines
-    .filter((line) => line.startsWith(SCREENSHOT_PREFIX))
-    .map((line) => line.replace(SCREENSHOT_PREFIX, "").trim())
-    .filter((value) => value.length > 0);
+  const lines = artifactLines(closeOutput);
+  const rawVideoPath = lines
+    .find((line) => line.startsWith(PLAYWRIGHT_VIDEO_PREFIX))
+    ?.replace(PLAYWRIGHT_VIDEO_PREFIX, "")
+    .trim();
+  const videoPath = rawVideoPath && rawVideoPath.length > 0 ? rawVideoPath : undefined;
 
   return {
     videoUrl: videoPath ? pathToFileURL(videoPath).href : undefined,
     videoPath,
-    screenshotPaths,
+    screenshotPaths: screenshotPathsFrom(lines),
   };
 };

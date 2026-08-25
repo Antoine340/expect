@@ -195,7 +195,8 @@ describe("extractArtifacts", () => {
   it("extracts recording path from close result", () => {
     const events = [
       new ToolResult({
-        toolName: "close",
+        toolCallId: "call-close",
+        toolName: "mcp__browser__close",
         result: "rrweb replay: /tmp/session.ndjson\nScreenshot: /tmp/s0.png",
         isError: false,
       }),
@@ -267,7 +268,8 @@ describe("diffEvents", () => {
   it("emits screenshot for screenshot ToolResult", () => {
     const events = [
       new ToolResult({
-        toolName: "browser__screenshot",
+        toolCallId: "call-screenshot",
+        toolName: "mcp__browser__screenshot",
         result: "/tmp/screenshot-0.png",
         isError: false,
       }),
@@ -276,6 +278,20 @@ describe("diffEvents", () => {
     const result = diffEvents([], events, executed, "http://localhost:3000", startedAt);
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe("screenshot");
+  });
+
+  it("does not pass a serialized image off as a screenshot path", () => {
+    const events = [
+      new ToolResult({
+        toolCallId: "call-screenshot",
+        toolName: "mcp__browser__screenshot",
+        result: '{"type":"image","data":"iVBORw0KGgoAAAANSUhEUg","mimeType":"image/png"}',
+        isError: false,
+      }),
+    ];
+    const executed = makeExecuted([], events);
+    const result = diffEvents([], events, executed, "http://localhost:3000", startedAt);
+    expect(result).toEqual([]);
   });
 
   it("only emits new events since previous snapshot", () => {

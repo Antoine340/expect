@@ -1,5 +1,6 @@
 import { Effect, Layer, Option, ServiceMap } from "effect";
 import { type ExecutedTestPlan, TestReport } from "@expect/shared/models";
+import { artifactLines, findCloseOutput, screenshotPathsFrom } from "@expect/shared/tool-events";
 
 export class Reporter extends ServiceMap.Service<Reporter>()("@supervisor/Reporter", {
   make: Effect.gen(function* () {
@@ -14,15 +15,8 @@ export class Reporter extends ServiceMap.Service<Reporter>()("@supervisor/Report
           ? `${failedSteps.length} step${failedSteps.length === 1 ? "" : "s"} failed, ${completedSteps.length} passed`
           : `${completedSteps.length} step${completedSteps.length === 1 ? "" : "s"} completed`;
 
-      const screenshotPaths = executed.events
-        .filter(
-          (event) =>
-            event._tag === "ToolResult" &&
-            event.toolName.endsWith("__screenshot") &&
-            !event.isError,
-        )
-        .map((event) => (event._tag === "ToolResult" ? event.result : ""))
-        .filter(Boolean);
+      const closeOutput = findCloseOutput(executed.events);
+      const screenshotPaths = closeOutput ? screenshotPathsFrom(artifactLines(closeOutput)) : [];
 
       const report = new TestReport({
         ...executed,

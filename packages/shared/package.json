@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./models": "./src/models.ts",
+    "./tool-events": "./src/tool-events.ts",
     "./prompts": "./src/prompts.ts",
     "./browser-tools": "./src/browser-tools.ts",
     "./observability": "./src/observability/exports.ts",

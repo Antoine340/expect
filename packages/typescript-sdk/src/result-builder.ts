@@ -1,9 +1,15 @@
+import * as path from "node:path";
 import { DateTime, Option } from "effect";
 import type { ExecutedTestPlan, TestPlanStep, ExecutionEvent } from "@expect/shared/models";
+import {
+  artifactLines,
+  findCloseOutput,
+  isToolNamed,
+  screenshotPathsFrom,
+} from "@expect/shared/tool-events";
 import type { Status, StepResult, TestResult, TestEvent } from "./types";
 
 const REPLAY_SESSION_PREFIX = "rrweb replay:";
-const SCREENSHOT_PREFIX = "Screenshot:";
 
 const stepDurationMs = (step: TestPlanStep): number => {
   if (Option.isNone(step.startedAt)) return 0;
@@ -27,35 +33,16 @@ export interface ExecutionArtifacts {
 }
 
 export const extractArtifacts = (events: readonly ExecutionEvent[]): ExecutionArtifacts => {
-  const closeResult = events
-    .slice()
-    .reverse()
-    .find(
-      (event) =>
-        event._tag === "ToolResult" &&
-        event.toolName === "close" &&
-        !event.isError &&
-        event.result.length > 0,
-    );
-
-  if (!closeResult || closeResult._tag !== "ToolResult") {
+  const closeOutput = findCloseOutput(events);
+  if (!closeOutput) {
     return { recordingPath: undefined, screenshotPaths: [] };
   }
 
-  const lines = closeResult.result
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
+  const lines = artifactLines(closeOutput);
   const replayLine = lines.find((line) => line.startsWith(REPLAY_SESSION_PREFIX));
   const recordingPath = replayLine?.replace(REPLAY_SESSION_PREFIX, "").trim() || undefined;
 
-  const screenshotPaths = lines
-    .filter((line) => line.startsWith(SCREENSHOT_PREFIX))
-    .map((line) => line.replace(SCREENSHOT_PREFIX, "").trim())
-    .filter((value) => value.length > 0);
-
-  return { recordingPath, screenshotPaths };
+  return { recordingPath, screenshotPaths: screenshotPathsFrom(lines) };
 };
 
 export const buildStepResult = (
@@ -143,7 +130,11 @@ const mapExecutionEvent = (event: ExecutionEvent, context: DiffContext): TestEve
         reason: event.reason,
       };
     case "ToolResult":
-      return event.toolName.endsWith("__screenshot") && !event.isError
+      // HACK: the screenshot tool returns image bytes, not a path — only the close output
+      // carries real paths. Emit nothing rather than pass a serialized image off as one.
+      return isToolNamed(event.toolName, "screenshot") &&
+        !event.isError &&
+        path.isAbsolute(event.result)
         ? { type: "screenshot", title: event.toolName, path: event.result }
         : undefined;
     case "RunFinished":

@@ -555,6 +555,7 @@ export class StepSkipped extends Schema.TaggedClass<StepSkipped>()("StepSkipped"
 }
 
 export class ToolCall extends Schema.TaggedClass<ToolCall>()("ToolCall", {
+  toolCallId: Schema.String,
   toolName: Schema.String,
   input: Schema.Unknown,
 }) {
@@ -570,6 +571,7 @@ export class ToolCall extends Schema.TaggedClass<ToolCall>()("ToolCall", {
 }
 
 export class ToolProgress extends Schema.TaggedClass<ToolProgress>()("ToolProgress", {
+  toolCallId: Schema.String,
   toolName: Schema.String,
   outputSize: Schema.Number,
 }) {
@@ -579,6 +581,7 @@ export class ToolProgress extends Schema.TaggedClass<ToolProgress>()("ToolProgre
 }
 
 export class ToolResult extends Schema.TaggedClass<ToolResult>()("ToolResult", {
+  toolCallId: Schema.String,
   toolName: Schema.String,
   result: Schema.String,
   isError: Schema.Boolean,
@@ -831,6 +834,7 @@ export class ExecutedTestPlan extends TestPlan.extend<ExecutedTestPlan>(
         events: [
           ...result.events,
           new ToolCall({
+            toolCallId: update.toolCallId,
             toolName: update.title,
             input: JSON.stringify(update.rawInput ?? {}),
           }),
@@ -841,12 +845,22 @@ export class ExecutedTestPlan extends TestPlan.extend<ExecutedTestPlan>(
     if (update.sessionUpdate === "tool_call_update") {
       let base: ExecutedTestPlan | undefined;
 
+      // HACK: ACP marks title optional on tool_call_update, so the display title is absent on
+      // most updates. toolCallId is required on both variants — it is the only reliable link
+      // back to the call that carried the name.
+      const originatingCall = this.events.findLast(
+        (event) => event._tag === "ToolCall" && event.toolCallId === update.toolCallId,
+      );
+      const toolName =
+        originatingCall?._tag === "ToolCall" ? originatingCall.toolName : (update.title ?? "");
+
       if (update.rawInput !== undefined) {
         const updatedEvents = [...this.events];
         for (let index = updatedEvents.length - 1; index >= 0; index--) {
           const event = updatedEvents[index];
-          if (event._tag === "ToolCall" && event.toolName === (update.title ?? "")) {
+          if (event._tag === "ToolCall" && event.toolCallId === update.toolCallId) {
             updatedEvents[index] = new ToolCall({
+              toolCallId: event.toolCallId,
               toolName: event.toolName,
               input: JSON.stringify(update.rawInput),
             });
@@ -864,7 +878,8 @@ export class ExecutedTestPlan extends TestPlan.extend<ExecutedTestPlan>(
           events: [
             ...current.events,
             new ToolResult({
-              toolName: update.title ?? "",
+              toolCallId: update.toolCallId,
+              toolName,
               result: serializeToolResult(update.rawOutput),
               isError: update.status === "failed",
             }),
@@ -877,11 +892,11 @@ export class ExecutedTestPlan extends TestPlan.extend<ExecutedTestPlan>(
           ...current,
           events: [
             ...current.events.filter(
-              (event) =>
-                !(event._tag === "ToolProgress" && event.toolName === (update.title ?? "")),
+              (event) => !(event._tag === "ToolProgress" && event.toolCallId === update.toolCallId),
             ),
             new ToolProgress({
-              toolName: update.title ?? "",
+              toolCallId: update.toolCallId,
+              toolName,
               outputSize,
             }),
           ],
